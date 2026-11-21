@@ -6,14 +6,17 @@ import { createPool } from "./db/pool.js";
 const config = loadServerConfig();
 const pool = createPool(config.database);
 const app = buildApp({
-  dependencies: createServerDependencies({
+  dependencies: await createServerDependencies({
     pool,
+    auth: config.auth,
+    traceMaxLatenessHours: config.traceMaxLatenessHours,
     ...(config.ingestToken === undefined
       ? {}
       : { ingestToken: config.ingestToken }),
     content: config.content,
   }),
   logger: true,
+  secureCookies: process.env.NODE_ENV === "production",
 });
 
 const close = async (signal: string): Promise<void> => {

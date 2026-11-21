@@ -31,26 +31,33 @@ TypeScript 或 Python Agent
 - Agent 运行、LLM、工具、检索和子 Agent 的 Span 封装。
 - 统一的脱敏和属性约定。
 - 基于 OpenTelemetry Proto `v1.11.1` 的 OTLP/HTTP protobuf 接入。
-- PostgreSQL 持久化、Trace 聚合、Trace 列表和详情 API。
+- PostgreSQL 持久化，以及 Worker 中的 Trace 聚合与分段封口。
+- 服务端 Trace 组合筛选和稳定游标分页。
 - 由 MinIO 支撑的服务端代理完整内容上传与读取。
 - TypeScript 和 Python SDK 完整内容捕获及 Span `content_id` 关联。
-- 由 `/api/v1/traces` 驱动的真实 Web 控制台。
+- 使用应用凭证写入、按事件幂等的用户 Feedback。
+- 带审核人身份和问题分类的追加式内部 Review。
+- OIDC 登录、本地开发身份，以及 `viewer`、`reviewer`、`admin` 角色。
+- 内容访问审计、过期清理和独立的内容查看权限。
+- Ingest 健康状态、拒收原因、聚合积压和 Web Operations 页面。
+- 真实 Trace 列表、详情、审查和内容查看控制台。
 - 独立的 PostgreSQL 和 MinIO 开发环境。
 
 尚未完成：
 
-- 评测、用户反馈和评分流程。
+- 数据集、自动评分、规则评测和 LLM Judge 流程。
 
 ## 本地开发
 
 ```bash
 pnpm install
-pnpm contracts:generate
+pnpm contracts:build
 pnpm architecture:check
 pnpm infra:up
 pnpm db:migrate
 pnpm typecheck
 pnpm test
+pnpm test:integration
 ```
 
 如果 Docker 使用非默认 Context：
@@ -58,6 +65,9 @@ pnpm test
 ```bash
 DOCKER_CONTEXT=orbstack pnpm infra:up
 ```
+
+`pnpm test:integration` 需要已执行迁移的 PostgreSQL 和 MinIO 开发环境，
+用于真实验证筛选、Feedback 幂等、Review、运维健康和过期内容审计。
 
 Python SDK：
 
@@ -72,6 +82,9 @@ uv run --project packages/sdk-python mypy packages/sdk-python/src/agent_ops
 ```bash
 pnpm dev
 ```
+
+本地默认使用 `AGENT_OPS_AUTH_MODE=dev`。OIDC 模式需要
+`.env.example` 中的 `OIDC_*` 配置；生产环境使用开发身份模式时服务端会拒绝启动。
 
 通过 TypeScript 示例写入真实 Trace：
 

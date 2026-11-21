@@ -90,6 +90,7 @@ class ContentStatus(StrEnum):
     AVAILABLE = "available"
     QUARANTINED = "quarantined"
     UNAVAILABLE = "unavailable"
+    EXPIRED = "expired"
     DELETED = "deleted"
 
 

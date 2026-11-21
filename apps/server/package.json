@@ -10,12 +10,15 @@
     "dev": "tsx watch src/main.ts",
     "start": "node dist/main.js",
     "test": "vitest run",
+    "test:integration": "AGENT_OPS_INTEGRATION=1 vitest run test/operational-review.integration.test.ts",
     "typecheck": "tsc -p tsconfig.json --noEmit"
   },
   "dependencies": {
     "@agent-ops/contracts": "workspace:*",
+    "@fastify/cookie": "11.1.5",
     "fastify": "5.12.8",
     "minio": "8.0.7",
+    "openid-client": "6.9.1",
     "pg": "8.23.1",
     "protobufjs": "8.8.1"
   },

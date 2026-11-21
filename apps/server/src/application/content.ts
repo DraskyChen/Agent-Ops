@@ -44,16 +44,33 @@ export interface ContentBlobStore {
 export interface ContentRepository {
   insert(record: ContentRecord): Promise<void>;
   find(contentId: string): Promise<ContentRecord | null>;
+  recordAccess(event: ContentAccessEvent): Promise<void>;
 }
 
 export interface ContentService {
   upload(input: ContentUploadInput): Promise<ContentRecord>;
-  get(contentId: string): Promise<StoredContent | null>;
+  get(contentId: string, actorSubject: string | null): Promise<StoredContent>;
+  auditDenied(contentId: string, actorSubject: string | null): Promise<void>;
 }
 
 export interface ContentServiceOptions {
   maxBytes: number;
   retentionDays: number;
+  now?: () => Date;
+}
+
+export type ContentAccessDecision =
+  | "allowed"
+  | "denied"
+  | "not_found"
+  | "expired"
+  | "error";
+
+export interface ContentAccessEvent {
+  contentId: string;
+  actorSubject: string | null;
+  decision: ContentAccessDecision;
+  reason: string | null;
 }
 
 export class ContentTooLargeError extends Error {
@@ -70,22 +87,44 @@ export class InvalidContentError extends Error {
   }
 }
 
+export class ContentNotFoundError extends Error {
+  constructor() {
+    super("Content not found");
+    this.name = "ContentNotFoundError";
+  }
+}
+
+export class ContentExpiredError extends Error {
+  constructor() {
+    super("Content has expired");
+    this.name = "ContentExpiredError";
+  }
+}
+
+export class ContentStorageError extends Error {
+  constructor(message: string, cause: unknown) {
+    super(message, { cause });
+    this.name = "ContentStorageError";
+  }
+}
+
 export function createContentService(
   blobs: ContentBlobStore,
   repository: ContentRepository,
   options: ContentServiceOptions,
 ): ContentService {
+  const now = options.now ?? (() => new Date());
   return {
     async upload(input) {
       validateUpload(input, options.maxBytes);
       const contentId = randomUUID();
-      const now = new Date();
+      const uploadedAt = now();
       const extension = contentFileExtension(input.mediaType);
       const objectKey = [
         "content",
-        String(now.getUTCFullYear()),
-        String(now.getUTCMonth() + 1).padStart(2, "0"),
-        String(now.getUTCDate()).padStart(2, "0"),
+        String(uploadedAt.getUTCFullYear()),
+        String(uploadedAt.getUTCMonth() + 1).padStart(2, "0"),
+        String(uploadedAt.getUTCDate()).padStart(2, "0"),
         `${contentId}.${extension}`,
       ].join("/");
       const record: ContentRecord = {
@@ -101,7 +140,7 @@ export function createContentService(
         encryption: "deployment-managed",
         status: "available",
         expiresAt: new Date(
-          now.getTime() + options.retentionDays * 24 * 60 * 60 * 1000,
+          uploadedAt.getTime() + options.retentionDays * 24 * 60 * 60 * 1000,
         ),
       };
 
@@ -115,17 +154,78 @@ export function createContentService(
       return record;
     },
 
-    async get(contentId) {
+    async get(contentId, actorSubject) {
       const metadata = await repository.find(contentId);
-      if (metadata === null || metadata.status !== "available") {
-        return null;
+      if (metadata === null) {
+        await record(repository, contentId, actorSubject, "not_found", null);
+        throw new ContentNotFoundError();
       }
-      return {
-        metadata,
-        body: await blobs.get(metadata.objectKey),
-      };
+      if (
+        metadata.status === "expired" ||
+        metadata.status === "deleted" ||
+        (metadata.expiresAt !== null && metadata.expiresAt <= now())
+      ) {
+        await record(
+          repository,
+          contentId,
+          actorSubject,
+          "expired",
+          "retention_expired",
+        );
+        throw new ContentExpiredError();
+      }
+      if (metadata.status !== "available") {
+        await record(
+          repository,
+          contentId,
+          actorSubject,
+          "not_found",
+          `content_${metadata.status}`,
+        );
+        throw new ContentNotFoundError();
+      }
+
+      try {
+        const body = await blobs.get(metadata.objectKey);
+        await record(repository, contentId, actorSubject, "allowed", null);
+        return { metadata, body };
+      } catch (error) {
+        await record(
+          repository,
+          contentId,
+          actorSubject,
+          "error",
+          "object_storage_unavailable",
+        );
+        throw new ContentStorageError(
+          "Content storage is temporarily unavailable",
+          error,
+        );
+      }
+    },
+
+    async auditDenied(contentId, actorSubject) {
+      await record(
+        repository,
+        contentId,
+        actorSubject,
+        "denied",
+        "missing_content_permission",
+      );
     },
   };
+}
+
+async function record(
+  repository: ContentRepository,
+  contentId: string,
+  actorSubject: string | null,
+  decision: ContentAccessDecision,
+  reason: string | null,
+): Promise<void> {
+  await repository
+    .recordAccess({ contentId, actorSubject, decision, reason })
+    .catch(() => undefined);
 }
 
 export function contentFileExtension(mediaType: string): string {

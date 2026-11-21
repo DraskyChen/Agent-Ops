@@ -8,7 +8,8 @@
   "scripts": {
     "architecture:check": "node scripts/check-architecture.mjs",
     "build": "pnpm -r --workspace-concurrency=1 --if-present build",
-    "check": "pnpm contracts:generate && pnpm architecture:check && pnpm typecheck && pnpm test && pnpm lint:python && pnpm typecheck:python && pnpm test:python",
+    "check": "pnpm typecheck && pnpm architecture:check && pnpm test && pnpm lint:python && pnpm typecheck:python && pnpm test:python",
+    "contracts:build": "pnpm --filter @agent-ops/contracts build",
     "contracts:generate": "pnpm --filter @agent-ops/contracts generate",
     "dev": "pnpm -r --parallel --if-present dev",
     "dev:server": "pnpm --filter @agent-ops/server dev",
@@ -22,8 +23,9 @@
     "format:check": "pnpm -r --if-present format:check",
     "lint:python": "uv run --project packages/sdk-python ruff check packages/sdk-python",
     "test": "pnpm -r --if-present test",
+    "test:integration": "pnpm --filter @agent-ops/server test:integration",
     "test:python": "uv run --project packages/sdk-python pytest -q",
-    "typecheck": "pnpm -r --workspace-concurrency=1 --if-present typecheck",
+    "typecheck": "pnpm contracts:build && pnpm -r --workspace-concurrency=1 --if-present typecheck",
     "typecheck:python": "uv run --project packages/sdk-python mypy packages/sdk-python/src/agent_ops"
   }
 }

@@ -1,9 +1,10 @@
 import { createHash } from "node:crypto";
 import { Readable } from "node:stream";
 
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 
 import {
+  ContentExpiredError,
   ContentTooLargeError,
   createContentService,
   type ContentRecord,
@@ -45,7 +46,9 @@ describe("content service", () => {
       createHash("sha256").update(body).digest("hex"),
     );
     expect(blobs.get(record.objectKey)).toEqual(body);
-    expect((await service.get(record.contentId))?.metadata).toEqual(record);
+    expect((await service.get(record.contentId, "reviewer")).metadata).toEqual(
+      record,
+    );
   });
 
   it("rejects content above the configured limit", async () => {
@@ -70,6 +73,79 @@ describe("content service", () => {
       }),
     ).rejects.toBeInstanceOf(ContentTooLargeError);
   });
+
+  it("records access and rejects content whose retention window elapsed", async () => {
+    const recordAccess = vi.fn().mockResolvedValue(undefined);
+    const service = createContentService(
+      {
+        put: async () => undefined,
+        get: async () => Readable.from([]),
+        delete: async () => undefined,
+      },
+      {
+        ...repository(new Map()),
+        async find() {
+          return {
+            contentId: "content-1",
+            objectKey: "content/one.txt",
+            ownerApp: "test-app",
+            contentKind: "llm_input",
+            mediaType: "text/plain",
+            captureMode: "full",
+            sizeBytes: 1,
+            sha256: "hash",
+            redactionRuleVersion: "v1",
+            encryption: "managed",
+            status: "available",
+            expiresAt: new Date("2026-11-20T00:00:00.000Z"),
+          };
+        },
+        recordAccess,
+      },
+      {
+        maxBytes: 1024,
+        retentionDays: 30,
+        now: () => new Date("2026-11-21T00:00:00.000Z"),
+      },
+    );
+
+    await expect(service.get("content-1", "reviewer")).rejects.toBeInstanceOf(
+      ContentExpiredError,
+    );
+    expect(recordAccess).toHaveBeenCalledWith({
+      contentId: "content-1",
+      actorSubject: "reviewer",
+      decision: "expired",
+      reason: "retention_expired",
+    });
+  });
+
+  it("records a denied content read without consulting object storage", async () => {
+    const get = vi.fn();
+    const recordAccess = vi.fn().mockResolvedValue(undefined);
+    const service = createContentService(
+      {
+        put: async () => undefined,
+        get,
+        delete: async () => undefined,
+      },
+      {
+        ...repository(new Map()),
+        recordAccess,
+      },
+      { maxBytes: 1024, retentionDays: 30 },
+    );
+
+    await service.auditDenied("content-1", "viewer");
+
+    expect(get).not.toHaveBeenCalled();
+    expect(recordAccess).toHaveBeenCalledWith({
+      contentId: "content-1",
+      actorSubject: "viewer",
+      decision: "denied",
+      reason: "missing_content_permission",
+    });
+  });
 });
 
 function repository(records: Map<string, ContentRecord>): ContentRepository {
@@ -79,6 +155,9 @@ function repository(records: Map<string, ContentRecord>): ContentRepository {
     },
     async find(contentId) {
       return records.get(contentId) ?? null;
+    },
+    async recordAccess() {
+      return undefined;
     },
   };
 }

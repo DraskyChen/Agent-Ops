@@ -3,11 +3,13 @@ import {
   Braces,
   Database,
   FlaskConical,
-  Gauge,
   LayoutList,
   LockKeyhole,
+  LogIn,
+  LogOut,
   Moon,
   RefreshCw,
+  ShieldCheck,
   Sun,
 } from "lucide-react";
 import { useEffect, useState } from "react";
@@ -16,15 +18,21 @@ import {
   healthLabel,
   useServerHealth,
 } from "./features/health/useServerHealth.js";
+import { OperationsPage } from "./features/operations/OperationsPage.js";
 import { TraceDetailPage } from "./features/traces/TraceDetailPage.js";
 import { TraceListPage } from "./features/traces/TraceListPage.js";
 import { useTraceExplorer } from "./features/traces/useTraceExplorer.js";
 
 type Theme = "light" | "dark";
+type ConsolePage = "traces" | "operations";
 
 export function Console() {
   const health = useServerHealth();
   const explorer = useTraceExplorer();
+  const authError = new URLSearchParams(window.location.search).get(
+    "authError",
+  );
+  const [page, setPage] = useState<ConsolePage>("traces");
   const [theme, setTheme] = useState<Theme>(() =>
     window.localStorage.getItem("agent-ops-theme") === "dark" ? "dark" : "light",
   );
@@ -49,8 +57,24 @@ export function Console() {
 
         <nav className="side-nav" aria-label="Main navigation">
           <NavSection label="Observe">
-            <NavItem active icon={<LayoutList size={16} />} label="Traces" />
-            <NavItem icon={<Gauge size={16} />} label="Dashboards" disabled />
+            <NavItem
+              active={page === "traces"}
+              icon={<LayoutList size={16} />}
+              label="Traces"
+              onClick={() => {
+                setPage("traces");
+                explorer.closeTrace();
+              }}
+            />
+            <NavItem
+              active={page === "operations"}
+              icon={<ShieldCheck size={16} />}
+              label="Operations"
+              onClick={() => {
+                setPage("operations");
+                explorer.closeTrace();
+              }}
+            />
             <NavItem icon={<FlaskConical size={16} />} label="Evaluations" disabled />
           </NavSection>
           <NavSection label="Manage">
@@ -61,10 +85,16 @@ export function Console() {
 
         <div className="sidebar-bottom">
           <div className="workspace-card">
-            <span className="workspace-avatar">AO</span>
+            <span className="workspace-avatar">
+              {explorer.me?.displayName.slice(0, 2).toUpperCase() ?? "AO"}
+            </span>
             <div>
-              <strong>Agent Platform</strong>
-              <small>Development workspace</small>
+              <strong>{explorer.me?.displayName ?? "Agent Platform"}</strong>
+              <small>
+                {explorer.me === null
+                  ? "Authentication required"
+                  : `${explorer.me.role} workspace`}
+              </small>
             </div>
           </div>
           <div className="service-state">
@@ -83,14 +113,17 @@ export function Console() {
             <span>Agent Platform</span>
             <span>/</span>
             <strong>
-              {explorer.selectedTrace === null
-                ? explorer.traces.find(
-                    (trace) => trace.id === explorer.selectedTraceId,
-                  )?.runName ?? "Traces"
-                : explorer.selectedTrace.runName}
+              {page === "operations"
+                ? "Operations"
+                : explorer.selectedTraceId === null
+                  ? "Traces"
+                  : explorer.selectedTrace?.runName ?? "Trace detail"}
             </strong>
           </div>
           <div className="topbar-actions">
+            {explorer.me === null ? null : (
+              <span className="demo-badge">{explorer.me.role}</span>
+            )}
             <span className="demo-badge">
               {explorer.loadError === null ? "Live data" : "API error"}
             </span>
@@ -102,30 +135,52 @@ export function Console() {
             >
               {theme === "light" ? <Moon size={16} /> : <Sun size={16} />}
             </button>
-            <button
-              className="button secondary compact"
-              type="button"
-              onClick={() => void explorer.loadTraces()}
-              disabled={explorer.loading}
-            >
-              <RefreshCw size={14} />
-              {explorer.loading ? "Loading" : "Refresh"}
-            </button>
+            {page === "traces" && explorer.selectedTraceId === null ? (
+              <button
+                className="button secondary compact"
+                type="button"
+                onClick={() => void explorer.refresh()}
+                disabled={explorer.loading}
+              >
+                <RefreshCw size={14} />
+                {explorer.loading ? "Loading" : "Refresh"}
+              </button>
+            ) : null}
+            {explorer.me === null ? (
+              <a className="button primary compact" href="/auth/login?returnTo=/console">
+                <LogIn size={14} />
+                Sign in
+              </a>
+            ) : (
+              <button
+                className="icon-button"
+                type="button"
+                aria-label="Sign out"
+                title="Sign out"
+                onClick={() => void signOut()}
+              >
+                <LogOut size={16} />
+              </button>
+            )}
           </div>
         </header>
 
-        {explorer.selectedTraceId === null ? (
+        {explorer.authLoading ? (
+          <AuthLoading />
+        ) : explorer.me === null ? (
+          <AuthRequired error={authError} />
+        ) : page === "operations" ? (
+          <OperationsPage />
+        ) : explorer.selectedTraceId === null ? (
           <TraceListPage
-            traces={explorer.filteredTraces}
-            query={explorer.query}
-            setQuery={explorer.setQuery}
-            statusFilter={explorer.statusFilter}
-            setStatusFilter={explorer.setStatusFilter}
-            environment={explorer.environment}
-            setEnvironment={explorer.setEnvironment}
+            traces={explorer.traces}
+            filters={explorer.filters}
+            setFilter={explorer.setFilter}
             onOpenTrace={explorer.openTrace}
-            allTraces={explorer.traces}
             loading={explorer.loading}
+            loadingMore={explorer.loadingMore}
+            hasMore={explorer.nextCursor !== null}
+            onLoadMore={() => void explorer.loadMore()}
             error={explorer.loadError}
           />
         ) : explorer.detailLoading || explorer.selectedTrace === null ? (
@@ -138,9 +193,41 @@ export function Console() {
             onSelectSpan={(span) => explorer.selectSpan(span.id)}
             onInspectorTab={explorer.setInspectorTab}
             onBack={explorer.closeTrace}
+            me={explorer.me}
+            reviewSubmitting={explorer.reviewSubmitting}
+            onSubmitReview={explorer.submitReview}
+            error={explorer.loadError}
           />
         )}
       </main>
+    </div>
+  );
+}
+
+function AuthLoading() {
+  return (
+    <div className="auth-state">
+      <Activity size={22} />
+      <strong>Checking your Agent Ops session…</strong>
+      <span>Human identity is separate from SDK ingest credentials.</span>
+    </div>
+  );
+}
+
+function AuthRequired({ error }: { error: string | null }) {
+  return (
+    <div className="auth-state">
+      <ShieldCheck size={23} />
+      <strong>Sign in to inspect traces</strong>
+      <span>
+        {error === null
+          ? "Trace metadata and captured content use role-based access."
+          : "SSO sign-in did not complete. Please try again."}
+      </span>
+      <a className="button primary" href="/auth/login?returnTo=/console">
+        <LogIn size={15} />
+        Continue with SSO
+      </a>
     </div>
   );
 }
@@ -151,10 +238,18 @@ function DetailLoading() {
       <div className="detail-loading" aria-live="polite">
         <Activity size={20} />
         <strong>Loading trace detail…</strong>
-        <span>Resolving spans and content from the ingest store.</span>
+        <span>Resolving spans, review history, and permitted content.</span>
       </div>
     </div>
   );
+}
+
+async function signOut(): Promise<void> {
+  await fetch("/auth/logout", {
+    method: "POST",
+    credentials: "same-origin",
+  });
+  window.location.assign("/console");
 }
 
 function NavSection({
@@ -177,11 +272,13 @@ function NavItem({
   label,
   active = false,
   disabled = false,
+  onClick,
 }: {
   icon: React.ReactNode;
   label: string;
   active?: boolean;
   disabled?: boolean;
+  onClick?: () => void;
 }) {
   if (disabled) {
     return (
@@ -199,9 +296,13 @@ function NavItem({
   }
 
   return (
-    <a className={`side-nav-item ${active ? "active" : ""}`} href="/console">
+    <button
+      className={`side-nav-item ${active ? "active" : ""}`}
+      type="button"
+      onClick={onClick}
+    >
       {icon}
       <span>{label}</span>
-    </a>
+    </button>
   );
 }

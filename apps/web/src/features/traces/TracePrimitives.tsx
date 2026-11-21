@@ -100,6 +100,10 @@ export function statusLabel(status: TraceStatus): string {
       return "Failed";
     case "partial":
       return "Partial";
+    case "cancelled":
+      return "Cancelled";
+    case "timeout":
+      return "Timeout";
   }
 }
 

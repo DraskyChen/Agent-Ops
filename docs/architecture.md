@@ -2,7 +2,7 @@
 
 [简体中文](architecture.zh-CN.md)
 
-Status: in implementation (MVP vertical slice)  
+Status: in implementation (operational review phase)
 Scope: self-hosted Agent observability platform and thin TypeScript/Python SDKs
 
 Code-level module boundaries and executable constraints are documented in
@@ -367,8 +367,15 @@ GET  /api/v1/traces
 GET  /api/v1/traces/:traceId
 GET  /api/v1/content/:contentId
 POST /api/v1/feedback
+POST /api/v1/traces/:traceId/reviews
+GET  /api/v1/operations/ingest
+GET  /api/v1/me
 POST /api/v1/scores
 ```
+
+`/api/v1/scores` remains reserved for the evaluation phase. User feedback uses
+an application credential and an idempotent `event_id`; internal reviews use
+OIDC identity and are append-only.
 
 Trace detail returns opaque content IDs and availability state. The content
 endpoint checks the separate content-view permission, records an access audit,
@@ -385,6 +392,8 @@ Trace list filters:
 - Model and prompt version.
 - Session ID.
 - Has errors.
+- Review state.
+- Cursor and time range.
 
 Trace detail returns:
 
@@ -488,7 +497,19 @@ feedback
   id                     uuid primary key
   trace_id               text
   span_id                text nullable
+  event_id               text nullable
+  actor_ref              text nullable
   type                   text
+  comment                text nullable
+  created_at             timestamptz
+
+trace_reviews
+  id                     uuid primary key
+  trace_id               text
+  reviewer_subject       text
+  reviewer_name          text
+  status                 text
+  issue_area             text nullable
   comment                text nullable
   created_at             timestamptz
 
@@ -526,6 +547,23 @@ content_objects
   status                 text
   created_at             timestamptz
   expires_at             timestamptz nullable
+
+content_access_log
+  id                     uuid primary key
+  content_id             uuid
+  actor_subject          text nullable
+  decision               text
+  reason                 text nullable
+  created_at             timestamptz
+
+auth_sessions
+  session_hash           text primary key
+  subject                text
+  display_name           text
+  email                  text nullable
+  role                   text
+  expires_at             timestamptz
+  created_at             timestamptz
 
 ingest_batches
   batch_id               uuid primary key

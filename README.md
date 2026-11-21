@@ -31,26 +31,35 @@ Implemented:
 - Agent run, LLM, tool, retrieval, and sub-agent span helpers.
 - Shared redaction and attribute conventions.
 - OTLP/HTTP protobuf ingest using OpenTelemetry Proto `v1.11.1`.
-- PostgreSQL persistence, trace aggregation, trace list, and trace detail APIs.
+- PostgreSQL persistence and the trace aggregation/sealing worker.
+- Server-side trace filters with stable cursor pagination.
 - Server-mediated full-content upload and retrieval backed by MinIO.
 - TypeScript and Python SDK content capture with `content_id` span references.
-- Live web console backed by `/api/v1/traces`.
+- User feedback ingestion with machine credentials and event idempotency.
+- Append-only internal trace reviews with reviewer identity and issue classification.
+- OIDC login with a local development identity mode and `viewer`, `reviewer`,
+  and `admin` roles.
+- Content access auditing, retention cleanup, and separate content viewing
+  permission.
+- Ingest health, rejection reasons, aggregation backlog, and Web operations page.
+- Live trace list, detail, review, and content console backed by the query API.
 - Independent PostgreSQL and MinIO development stack.
 
 Not implemented yet:
 
-- Evaluation, feedback, and score workflows.
+- Datasets, automated scoring, rule evaluation, and LLM-judge workflows.
 
 ## Local development
 
 ```bash
 pnpm install
-pnpm contracts:generate
+pnpm contracts:build
 pnpm architecture:check
 pnpm infra:up
 pnpm db:migrate
 pnpm typecheck
 pnpm test
+pnpm test:integration
 ```
 
 If Docker uses a non-default context:
@@ -58,6 +67,10 @@ If Docker uses a non-default context:
 ```bash
 DOCKER_CONTEXT=orbstack pnpm infra:up
 ```
+
+`pnpm test:integration` requires the migrated PostgreSQL and MinIO development
+stack. It verifies filters, feedback idempotency, reviews, operations health,
+and expired-content auditing against the real database.
 
 Python SDK:
 
@@ -72,6 +85,10 @@ Run the platform:
 ```bash
 pnpm dev
 ```
+
+Local development defaults to `AGENT_OPS_AUTH_MODE=dev`. OIDC mode requires
+the `OIDC_*` values documented in `.env.example`; the server refuses to start in
+production with the development identity mode.
 
 Emit real traces through the TypeScript examples:
 

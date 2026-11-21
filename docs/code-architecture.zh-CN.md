@@ -50,12 +50,17 @@ apps/server/src/
   config.ts                   环境变量到类型化配置
   application/
     dependencies.ts           Server 用例端口
+    auth.ts                   人类身份与角色规则
     ingest.ts                 OTLP 接入用例与错误语义
     traces.ts                 Trace 查询用例和输入规范化
+    feedback.ts               用户反馈校验与幂等用例
+    reviews.ts                内部审查用例
+    operations.ts             运维健康查询用例
   http/
     ingest-auth.ts            机器凭证校验
     routes/                   HTTP 协议适配
   infrastructure/
+    auth/                     dev 与 OIDC 身份适配器
     otlp/                     protobuf 解码与响应编码
     postgres/                 幂等写入和读取查询
   db/
@@ -80,7 +85,7 @@ HTTP request
 ```text
 HTTP query
   -> TraceQueryService
-  -> normalize filters and limit
+  -> normalize filters, time range, and cursor
   -> TraceReadRepository
   -> PostgreSQL
 ```
@@ -165,10 +170,10 @@ pnpm architecture:check
 
 ## 8. 当前债务与下一步
 
-当前代码边界已经可执行，但以下部分仍需继续收敛：
+Phase 2 已补齐服务端筛选、游标分页、封口时钟、内容过期清理、OIDC 身份边界和内容访问审计。当前仍需继续收敛：
 
 1. `infrastructure/postgres/ingest-store.ts` 仍是较大的事务脚本。下一步可拆成 `IngestBatchWriter`、`SpanWriter`、`SessionWriter` 和 `AggregationJobScheduler`，但应保持同一事务。
-2. Trace 查询尚未支持游标分页、时间范围和统一错误映射；这些应进入应用查询模型，而不是继续堆在 SQL 字符串中。
-3. Worker 的封口状态机尚未实现 120 秒宽限期和空闲超时。实现时应保持纯决策函数与持久化分离。
-4. 内容存储已使用 `ContentStore` 端口，并实现 MinIO 与内存适配器。剩余工作是保留期清理、隔离扫描和独立的内容读取权限。
-5. 人类用户的查询接口尚未接入 SSO；机器 ingest 凭证已经与 HTTP 校验适配器分离。
+2. Trace 搜索仍基于 PostgreSQL `ILIKE` 和精确字段，达到容量目标前需要基于真实查询计划决定 trigram、复合索引或全文搜索。
+3. Worker 当前通过 `not_before` 安排未来的封口任务；多 Worker 部署前仍需对内容保留扫描和任务吞吐做压力验证。
+4. 内容隔离扫描尚未实现。当前已有独立查看权限、审计和保留期删除，但上传内容仍默认可信地进入 `available`。
+5. OIDC 已支持标准发现、Authorization Code + PKCE 和服务端会话；具体身份提供商的 group claim、会话撤销 SLA 和 IdP 登出仍由部署方约定。

@@ -56,7 +56,7 @@ function createTransaction(client: PoolClient): AggregationTransaction {
       const result = await client.query<{ trace_id: string }>(
         `select trace_id
          from trace_aggregation_jobs
-         where state = 'pending'
+         where state = 'pending' and not_before <= now()
          order by requested_at
          for update skip locked
          limit 1`,
@@ -109,7 +109,7 @@ function createTransaction(client: PoolClient): AggregationTransaction {
         ) values (
           $1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15,
           $16, $17, $18, $19, $20, $21, $22, $23, $24, $25, $26, $27, $28,
-          $29, now(), 1
+          $29, $30, 1
         )
         on conflict (trace_id) do update set
           session_id = excluded.session_id,
@@ -143,6 +143,18 @@ function createTransaction(client: PoolClient): AggregationTransaction {
           sealed_at = excluded.sealed_at,
           aggregation_revision = traces.aggregation_revision + 1`,
         traceValues(trace),
+      );
+    },
+
+    async schedule(traceId, notBefore) {
+      await client.query(
+        `update trace_aggregation_jobs set
+          state = 'pending',
+          requested_at = least(requested_at, $2),
+          not_before = $2,
+          completed_at = null
+        where trace_id = $1`,
+        [traceId, notBefore],
       );
     },
 
@@ -274,5 +286,6 @@ function traceValues(trace: AggregatedTrace): unknown[] {
     "USD",
     trace.completeness,
     trace.ingestState,
+    trace.sealedAt,
   ];
 }

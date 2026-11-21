@@ -34,7 +34,11 @@ Architecture checks prevent HTTP routes from importing database or OTLP adapters
 
 ## Server
 
-`app.ts` owns Fastify delivery concerns. `application/*` defines ingest and query use cases plus ports. `infrastructure/otlp/*` handles protobuf, and `infrastructure/postgres/*` owns SQL. `composition.ts` is the only production wiring point.
+`app.ts` owns Fastify delivery concerns. `application/*` defines ingest, query,
+feedback, review, operations, and human-auth use cases plus ports.
+`infrastructure/otlp/*` handles protobuf, `infrastructure/auth/*` owns identity
+providers, and `infrastructure/postgres/*` owns SQL. `composition.ts` is the
+only production wiring point.
 
 The OTLP path is:
 
@@ -47,6 +51,10 @@ The query path is:
 ```text
 HTTP query -> TraceQueryService -> normalized filters -> TraceReadRepository -> PostgreSQL
 ```
+
+Human requests use opaque server-side sessions created through OIDC
+Authorization Code + PKCE. Application SDK requests continue to use separate
+machine credentials. Content reads require the reviewer role and are audited.
 
 ## Web
 

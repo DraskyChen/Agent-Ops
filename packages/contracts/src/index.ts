@@ -11,7 +11,18 @@ import {
 export * from "./generated.js";
 export type {
   ApiErrorResponse,
+  FeedbackItem,
+  FeedbackWriteRequest,
+  FeedbackWriteResponse,
   HealthResponse,
+  HumanRole,
+  IngestHealthResponse,
+  MeResponse,
+  ReviewIssueArea,
+  ReviewItem,
+  ReviewState,
+  ReviewStatus,
+  ReviewWriteRequest,
   TraceDetail,
   TraceListItem,
   TraceListQuery,
