@@ -4,15 +4,22 @@ import {
   normalizeSpanType,
   normalizeTaskType,
   type Environment,
+  type FeedbackItem,
+  type FeedbackType,
+  type ReviewIssueArea,
+  type ReviewItem,
+  type ReviewState,
+  type ReviewStatus,
   type TraceDetail,
   type TraceListItem,
   type TraceSpan,
 } from "@agent-ops/contracts";
 import type { Pool } from "pg";
 
-import type {
-  NormalizedTraceListQuery,
-  TraceReadRepository,
+import {
+  encodeTraceCursor,
+  type NormalizedTraceListQuery,
+  type TraceReadRepository,
 } from "../../application/traces.js";
 
 export function createPostgresTraceReadRepository(
@@ -20,53 +27,127 @@ export function createPostgresTraceReadRepository(
 ): TraceReadRepository {
   return {
     async list(query) {
-      const conditions: string[] = ["start_time is not null"];
-      const values: unknown[] = [];
+      const conditions: string[] = [
+        "t.start_time is not null",
+        "t.start_time >= $1",
+      ];
+      const values: unknown[] = [query.startedAfter];
 
-      if (query.status !== undefined) {
-        values.push(query.status);
-        conditions.push(`run_status = $${values.length}`);
+      if (query.startedBefore !== undefined) {
+        values.push(query.startedBefore);
+        conditions.push(`t.start_time < $${values.length}`);
       }
-      if (query.environment !== undefined) {
-        values.push(query.environment);
-        conditions.push(`environment = $${values.length}`);
+      addExactFilter(conditions, values, "t.run_status", query.status);
+      addExactFilter(conditions, values, "t.environment", query.environment);
+      addExactFilter(conditions, values, "t.app_name", query.appName);
+      addExactFilter(conditions, values, "t.task_type", query.taskType);
+      addExactFilter(conditions, values, "t.model", query.model);
+      addExactFilter(
+        conditions,
+        values,
+        "t.prompt_version",
+        query.promptVersion,
+      );
+      addExactFilter(
+        conditions,
+        values,
+        "t.service_version",
+        query.serviceVersion,
+      );
+
+      if (query.hasErrors === "true") {
+        conditions.push(
+          "(coalesce(t.tool_error_count, 0) > 0 or t.run_status in ('failed', 'partial', 'timeout'))",
+        );
+      } else if (query.hasErrors === "false") {
+        conditions.push(
+          "coalesce(t.tool_error_count, 0) = 0 and (t.run_status is null or t.run_status in ('success', 'cancelled'))",
+        );
       }
+
+      if (query.reviewStatus === "unreviewed") {
+        conditions.push("latest_review.status is null");
+      } else if (query.reviewStatus !== undefined) {
+        values.push(query.reviewStatus);
+        conditions.push(`latest_review.status = $${values.length}`);
+      }
+
       if (query.search !== undefined) {
         values.push(`%${query.search}%`);
         const index = values.length;
         conditions.push(`(
-          run_name ilike $${index}
-          or trace_id ilike $${index}
-          or task_type ilike $${index}
-          or model ilike $${index}
-          or session_id ilike $${index}
+          t.run_name ilike $${index}
+          or t.trace_id ilike $${index}
+          or t.task_type ilike $${index}
+          or t.model ilike $${index}
+          or t.session_id ilike $${index}
+          or t.app_name ilike $${index}
         )`);
       }
 
-      values.push(query.limit);
+      if (query.cursor !== undefined) {
+        values.push(query.cursor.startedAt, query.cursor.traceId);
+        conditions.push(
+          `(t.start_time, t.trace_id) < ($${values.length - 1}, $${values.length})`,
+        );
+      }
+
+      values.push(query.limit + 1);
       const result = await pool.query<TraceRow>(
         `select
-          trace_id, run_name, session_id, task_type, model, environment,
-          run_status, duration_ms, cost_micros, input_tokens, output_tokens,
-          step_count, start_time, ingest_state
-        from traces
+          t.trace_id, t.run_name, t.session_id, t.app_name,
+          t.service_version, t.task_type, t.model, t.prompt_version,
+          t.environment, t.run_status, t.duration_ms, t.cost_micros,
+          t.input_tokens, t.output_tokens, t.step_count, t.tool_error_count,
+          t.start_time, t.ingest_state,
+          latest_review.status as review_status
+        from traces t
+        left join lateral (
+          select status
+          from trace_reviews
+          where trace_id = t.trace_id
+          order by created_at desc, id desc
+          limit 1
+        ) latest_review on true
         where ${conditions.join(" and ")}
-        order by start_time desc, trace_id
+        order by t.start_time desc, t.trace_id desc
         limit $${values.length}`,
         values,
       );
 
-      return result.rows.map(mapTraceListItem);
+      const hasNextPage = result.rows.length > query.limit;
+      const rows = result.rows.slice(0, query.limit);
+      const last = rows.at(-1);
+      return {
+        items: rows.map(mapTraceListItem),
+        nextCursor:
+          hasNextPage && last !== undefined && last.start_time !== null
+            ? encodeTraceCursor({
+                startedAt: last.start_time.toISOString(),
+                traceId: last.trace_id,
+              })
+            : null,
+      };
     },
 
     async get(traceId) {
       const traceResult = await pool.query<TraceRow>(
         `select
-          trace_id, run_name, session_id, task_type, model, environment,
-          run_status, duration_ms, cost_micros, input_tokens, output_tokens,
-          step_count, start_time, ingest_state, prompt_version, stop_reason
-        from traces
-        where trace_id = $1`,
+          t.trace_id, t.run_name, t.session_id, t.app_name,
+          t.service_version, t.task_type, t.model, t.prompt_version,
+          t.environment, t.run_status, t.duration_ms, t.cost_micros,
+          t.input_tokens, t.output_tokens, t.step_count, t.tool_error_count,
+          t.start_time, t.ingest_state, t.stop_reason,
+          latest_review.status as review_status
+        from traces t
+        left join lateral (
+          select status
+          from trace_reviews
+          where trace_id = t.trace_id
+          order by created_at desc, id desc
+          limit 1
+        ) latest_review on true
+        where t.trace_id = $1`,
         [traceId],
       );
       const trace = traceResult.rows[0];
@@ -74,23 +155,45 @@ export function createPostgresTraceReadRepository(
         return null;
       }
 
-      const spans = await pool.query<SpanRow>(
-        `select
-          span_id, parent_span_id, name, span_type, span_subtype, service_name,
-          start_time, end_time, duration_ms, status, error_type, error_category,
-          attributes, resource_attributes, input_tokens, output_tokens,
-          cost_micros, input_content_ref, output_content_ref
-        from spans
-        where trace_id = $1
-        order by start_time asc, span_id asc`,
-        [traceId],
-      );
+      const [spans, feedback, reviews] = await Promise.all([
+        pool.query<SpanRow>(
+          `select
+            span_id, parent_span_id, name, span_type, span_subtype, service_name,
+            start_time, end_time, duration_ms, status, error_type, error_category,
+            attributes, resource_attributes, input_tokens, output_tokens,
+            cost_micros, input_content_ref, output_content_ref
+          from spans
+          where trace_id = $1
+          order by start_time asc, span_id asc`,
+          [traceId],
+        ),
+        pool.query<FeedbackRow>(
+          `select
+            id, trace_id, span_id, event_id, type, actor_ref, comment, created_at
+          from feedback
+          where trace_id = $1
+          order by created_at desc, id desc
+          limit 100`,
+          [traceId],
+        ),
+        pool.query<ReviewRow>(
+          `select
+            id, trace_id, reviewer_subject, reviewer_name, status, issue_area,
+            comment, created_at
+          from trace_reviews
+          where trace_id = $1
+          order by created_at desc, id desc
+          limit 100`,
+          [traceId],
+        ),
+      ]);
 
       return {
         ...mapTraceListItem(trace),
-        promptVersion: trace.prompt_version,
         stopReason: trace.stop_reason,
         spans: spans.rows.map(mapTraceSpan),
+        feedback: feedback.rows.map(mapFeedback),
+        reviews: reviews.rows.map(mapReview),
       };
     },
   };
@@ -100,8 +203,11 @@ interface TraceRow {
   trace_id: string;
   run_name: string | null;
   session_id: string | null;
+  app_name: string | null;
+  service_version: string | null;
   task_type: string | null;
   model: string | null;
+  prompt_version: string | null;
   environment: string | null;
   run_status: string | null;
   duration_ms: string | null;
@@ -109,10 +215,11 @@ interface TraceRow {
   input_tokens: string | null;
   output_tokens: string | null;
   step_count: number | null;
+  tool_error_count: number | null;
   start_time: Date | null;
   ingest_state: string;
-  prompt_version: string | null;
   stop_reason: string | null;
+  review_status: string | null;
 }
 
 interface SpanRow {
@@ -137,14 +244,39 @@ interface SpanRow {
   output_content_ref: string | null;
 }
 
+interface FeedbackRow {
+  id: string;
+  trace_id: string;
+  span_id: string | null;
+  event_id: string;
+  type: string;
+  actor_ref: string | null;
+  comment: string | null;
+  created_at: Date;
+}
+
+interface ReviewRow {
+  id: string;
+  trace_id: string;
+  reviewer_subject: string;
+  reviewer_name: string;
+  status: string;
+  issue_area: string | null;
+  comment: string | null;
+  created_at: Date;
+}
+
 function mapTraceListItem(row: TraceRow): TraceListItem {
   return {
     traceId: row.trace_id,
     runName: row.run_name ?? "Untitled agent run",
     sessionId: row.session_id,
+    appName: row.app_name,
+    serviceVersion: row.service_version,
     taskType:
       row.task_type === null ? null : normalizeTaskType(row.task_type),
     model: row.model,
+    promptVersion: row.prompt_version,
     environment: normalizeEnvironment(row.environment),
     runStatus:
       row.run_status !== null && isRunStatus(row.run_status)
@@ -155,6 +287,8 @@ function mapTraceListItem(row: TraceRow): TraceListItem {
     inputTokens: numberOrNull(row.input_tokens),
     outputTokens: numberOrNull(row.output_tokens),
     stepCount: row.step_count,
+    toolErrorCount: row.tool_error_count,
+    reviewStatus: normalizeReviewState(row.review_status),
     startedAt: row.start_time?.toISOString() ?? null,
     ingestState: isTraceIngestState(row.ingest_state)
       ? row.ingest_state
@@ -187,6 +321,32 @@ function mapTraceSpan(row: SpanRow): TraceSpan {
   };
 }
 
+function mapFeedback(row: FeedbackRow): FeedbackItem {
+  return {
+    feedbackId: row.id,
+    traceId: row.trace_id,
+    spanId: row.span_id,
+    eventId: row.event_id,
+    type: normalizeFeedbackType(row.type),
+    actorRef: row.actor_ref,
+    comment: row.comment,
+    createdAt: row.created_at.toISOString(),
+  };
+}
+
+function mapReview(row: ReviewRow): ReviewItem {
+  return {
+    reviewId: row.id,
+    traceId: row.trace_id,
+    reviewerSubject: row.reviewer_subject,
+    reviewerName: row.reviewer_name,
+    status: normalizeReviewStatus(row.status),
+    issueArea: normalizeIssueArea(row.issue_area),
+    comment: row.comment,
+    createdAt: row.created_at.toISOString(),
+  };
+}
+
 function normalizeEnvironment(value: string | null): Environment | null {
   return value === "prod" ||
     value === "staging" ||
@@ -196,6 +356,50 @@ function normalizeEnvironment(value: string | null): Environment | null {
     : null;
 }
 
+function normalizeReviewState(value: string | null): ReviewState {
+  return value === "open" || value === "resolved" || value === "ignored"
+    ? value
+    : "unreviewed";
+}
+
+function normalizeReviewStatus(value: string): ReviewStatus {
+  return value === "resolved" || value === "ignored" ? value : "open";
+}
+
+function normalizeIssueArea(value: string | null): ReviewIssueArea | null {
+  return value === "prompt" ||
+    value === "model" ||
+    value === "tool" ||
+    value === "retrieval" ||
+    value === "data" ||
+    value === "infrastructure" ||
+    value === "other"
+    ? value
+    : null;
+}
+
+function normalizeFeedbackType(value: string): FeedbackType {
+  return value === "thumbs_up" ||
+    value === "thumbs_down" ||
+    value === "retry" ||
+    value === "abandon"
+    ? value
+    : "comment";
+}
+
 function numberOrNull(value: string | null): number | null {
   return value === null ? null : Number(value);
+}
+
+function addExactFilter(
+  conditions: string[],
+  values: unknown[],
+  column: string,
+  value: string | undefined,
+): void {
+  if (value === undefined) {
+    return;
+  }
+  values.push(value);
+  conditions.push(`${column} = $${values.length}`);
 }

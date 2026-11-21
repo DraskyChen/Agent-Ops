@@ -1,6 +1,7 @@
 import type { Pool } from "pg";
 
 import type {
+  ContentAccessEvent,
   ContentRecord,
   ContentRepository,
 } from "../../application/content.js";
@@ -66,11 +67,26 @@ export function createPostgresContentRepository(
           row.status === "available" ||
           row.status === "quarantined" ||
           row.status === "unavailable" ||
+          row.status === "expired" ||
           row.status === "deleted"
             ? row.status
             : "unavailable",
         expiresAt: row.expires_at,
       };
+    },
+
+    async recordAccess(event: ContentAccessEvent) {
+      await pool.query(
+        `insert into content_access_log (
+          content_id, actor_subject, decision, reason
+        ) values ($1, $2, $3, $4)`,
+        [
+          event.contentId,
+          event.actorSubject,
+          event.decision,
+          event.reason,
+        ],
+      );
     },
   };
 }

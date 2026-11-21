@@ -106,6 +106,7 @@ enums:
     - available
     - quarantined
     - unavailable
+    - expired
     - deleted
 
 conformance_levels:
@@ -373,6 +374,8 @@ side_channel:
     fields:
       - trace_id
       - span_id
+      - event_id
+      - actor_ref
       - type
       - comment
       - created_at

@@ -75,6 +75,7 @@
       "available",
       "quarantined",
       "unavailable",
+      "expired",
       "deleted"
     ]
   },
@@ -525,6 +526,8 @@
       "fields": [
         "trace_id",
         "span_id",
+        "event_id",
+        "actor_ref",
         "type",
         "comment",
         "created_at"

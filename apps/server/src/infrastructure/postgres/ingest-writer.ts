@@ -7,10 +7,17 @@ import type {
 } from "../../application/ingest.js";
 import { persistBatch } from "./ingest-store.js";
 
-export function createPostgresTraceBatchWriter(pool: Pool): TraceBatchWriter {
+export interface TraceBatchWriterOptions {
+  maxLatenessHours: number;
+}
+
+export function createPostgresTraceBatchWriter(
+  pool: Pool,
+  options: TraceBatchWriterOptions = { maxLatenessHours: 24 },
+): TraceBatchWriter {
   return {
     persist(input: IngestBatchWrite): Promise<IngestWriteReceipt> {
-      return persistBatch(pool, input);
+      return persistBatch(pool, input, options);
     },
   };
 }

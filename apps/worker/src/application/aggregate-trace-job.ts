@@ -9,6 +9,7 @@ export interface AggregationTransaction {
   loadSpans(traceId: string): Promise<StoredTraceSpan[]>;
   priceSpans(spans: StoredTraceSpan[]): Promise<void>;
   saveTrace(trace: AggregatedTrace): Promise<void>;
+  schedule(traceId: string, notBefore: Date): Promise<void>;
   complete(traceId: string): Promise<void>;
 }
 
@@ -23,9 +24,19 @@ export interface TraceAggregationWorker {
   processNextJob(): Promise<boolean>;
 }
 
+export interface TraceAggregationWorkerOptions {
+  now?: () => Date;
+  rootSealGraceMs?: number;
+  idleTimeoutMs?: number;
+}
+
 export function createTraceAggregationWorker(
   store: AggregationJobStore,
+  options: TraceAggregationWorkerOptions = {},
 ): TraceAggregationWorker {
+  const now = options.now ?? (() => new Date());
+  const rootSealGraceMs = options.rootSealGraceMs ?? 120_000;
+  const idleTimeoutMs = options.idleTimeoutMs ?? 15 * 60_000;
   return {
     async processNextJob() {
       let traceId: string | undefined;
@@ -39,9 +50,17 @@ export function createTraceAggregationWorker(
 
           const spans = await transaction.loadSpans(claimedTraceId);
           await transaction.priceSpans(spans);
-          const trace = aggregateTraceSpans(claimedTraceId, spans);
+          const trace = aggregateTraceSpans(claimedTraceId, spans, {
+            now: now(),
+            rootSealGraceMs,
+            idleTimeoutMs,
+          });
           await transaction.saveTrace(trace);
-          await transaction.complete(claimedTraceId);
+          if (trace.sealAfter === null) {
+            await transaction.complete(claimedTraceId);
+          } else {
+            await transaction.schedule(claimedTraceId, trace.sealAfter);
+          }
           return true;
         });
       } catch (error) {

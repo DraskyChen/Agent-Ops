@@ -8,7 +8,7 @@ import {
   Timer,
 } from "lucide-react";
 
-import type { TraceView } from "./model.js";
+import type { TraceFilters, TraceView } from "./model.js";
 import {
   formatCost,
   formatDuration,
@@ -18,42 +18,45 @@ import {
   statusLabel,
   TypeTag,
 } from "./TracePrimitives.js";
-import type { TraceFilter } from "./useTraceExplorer.js";
 
 export function TraceListPage({
   traces,
-  allTraces,
-  query,
-  setQuery,
-  statusFilter,
-  setStatusFilter,
-  environment,
-  setEnvironment,
+  filters,
+  setFilter,
   onOpenTrace,
   loading,
+  loadingMore,
+  hasMore,
+  onLoadMore,
   error,
 }: {
   traces: TraceView[];
-  allTraces: TraceView[];
-  query: string;
-  setQuery: (value: string) => void;
-  statusFilter: TraceFilter;
-  setStatusFilter: (value: TraceFilter) => void;
-  environment: string;
-  setEnvironment: (value: string) => void;
+  filters: TraceFilters;
+  setFilter: <Key extends keyof TraceFilters>(
+    key: Key,
+    value: TraceFilters[Key],
+  ) => void;
   onOpenTrace: (trace: TraceView) => void;
   loading: boolean;
+  loadingMore: boolean;
+  hasMore: boolean;
+  onLoadMore: () => void;
   error: string | null;
 }) {
-  const successes = allTraces.filter((trace) => trace.status === "success").length;
-  const errors = allTraces.filter((trace) => trace.status === "failed").length;
+  const successes = traces.filter((trace) => trace.status === "success").length;
+  const errors = traces.filter(
+    (trace) =>
+      trace.status === "failed" ||
+      trace.status === "timeout" ||
+      trace.toolErrorCount > 0,
+  ).length;
   const avgLatency = Math.round(
-    allTraces.length === 0
+    traces.length === 0
       ? 0
-      : allTraces.reduce((total, trace) => total + trace.latencyMs, 0) /
-          allTraces.length,
+      : traces.reduce((total, trace) => total + trace.latencyMs, 0) /
+          traces.length,
   );
-  const totalCost = allTraces.reduce(
+  const totalCost = traces.reduce(
     (total, trace) => total + trace.costMicros,
     0,
   );
@@ -68,34 +71,34 @@ export function TraceListPage({
         </div>
       </div>
 
-      <section className="metrics-strip" aria-label="Trace overview">
+      <section className="metrics-strip" aria-label="Loaded trace page overview">
         <Metric
           icon={<Activity size={16} />}
-          label="Runs"
-          value={allTraces.length.toString()}
-          detail="in live data"
+          label="Loaded runs"
+          value={traces.length.toString()}
+          detail="current result page"
         />
         <Metric
           icon={<CircleCheck size={16} />}
-          label="Success rate"
+          label="Page success rate"
           value={`${
-            allTraces.length === 0
+            traces.length === 0
               ? 0
-              : Math.round((successes / allTraces.length) * 100)
+              : Math.round((successes / traces.length) * 100)
           }%`}
           detail={`${successes} successful`}
         />
         <Metric
           icon={<Timer size={16} />}
-          label="Average latency"
+          label="Page average latency"
           value={formatDuration(avgLatency)}
-          detail={`${errors} failed runs`}
+          detail={`${errors} runs with errors`}
         />
         <Metric
           icon={<Gauge size={16} />}
-          label="Trace cost"
+          label="Page trace cost"
           value={formatCost(totalCost)}
-          detail="selected run window"
+          detail="loaded results only"
         />
       </section>
 
@@ -105,71 +108,128 @@ export function TraceListPage({
             <Search size={15} />
             <input
               type="search"
-              value={query}
-              onChange={(event) => setQuery(event.target.value)}
-              placeholder="Search runs, task types, models, trace IDs…"
+              value={filters.search}
+              onChange={(event) => setFilter("search", event.target.value)}
+              placeholder="Search runs, apps, task types, models, trace IDs…"
               aria-label="Search traces"
             />
           </label>
 
-          <label className="select-field">
-            <span>Time</span>
-            <select aria-label="Time range" defaultValue="24h">
-              <option value="24h">Last 24 hours</option>
-              <option value="7d">Last 7 days</option>
-              <option value="30d">Last 30 days</option>
-            </select>
-            <ChevronDown size={14} />
-          </label>
-
-          <label className="select-field">
-            <span>Environment</span>
-            <select
-              aria-label="Environment filter"
-              value={environment}
-              onChange={(event) => setEnvironment(event.target.value)}
-            >
-              <option value="all">All environments</option>
-              <option value="prod">Production</option>
-              <option value="staging">Staging</option>
-            </select>
-            <ChevronDown size={14} />
-          </label>
-
-          <label className="select-field">
-            <span>Status</span>
-            <select
-              aria-label="Status filter"
-              value={statusFilter}
-              onChange={(event) =>
-                setStatusFilter(event.target.value as TraceFilter)
-              }
-            >
-              <option value="all">All statuses</option>
-              <option value="success">Success</option>
-              <option value="failed">Failed</option>
-              <option value="partial">Partial</option>
-            </select>
-            <ChevronDown size={14} />
-          </label>
+          <Select
+            label="Time"
+            value={filters.timeRange}
+            onChange={(value) =>
+              setFilter("timeRange", value as TraceFilters["timeRange"])
+            }
+            options={[
+              ["24h", "Last 24 hours"],
+              ["7d", "Last 7 days"],
+              ["30d", "Last 30 days"],
+            ]}
+          />
+          <Select
+            label="Environment"
+            value={filters.environment}
+            onChange={(value) => setFilter("environment", value)}
+            options={[
+              ["all", "All environments"],
+              ["prod", "Production"],
+              ["staging", "Staging"],
+              ["dev", "Development"],
+              ["test", "Test"],
+            ]}
+          />
+          <Select
+            label="Status"
+            value={filters.status}
+            onChange={(value) =>
+              setFilter("status", value as TraceFilters["status"])
+            }
+            options={[
+              ["all", "All statuses"],
+              ["success", "Success"],
+              ["failed", "Failed"],
+              ["partial", "Partial"],
+              ["cancelled", "Cancelled"],
+              ["timeout", "Timeout"],
+            ]}
+          />
+          <Select
+            label="Review"
+            value={filters.reviewStatus}
+            onChange={(value) =>
+              setFilter(
+                "reviewStatus",
+                value as TraceFilters["reviewStatus"],
+              )
+            }
+            options={[
+              ["all", "Any review"],
+              ["unreviewed", "Unreviewed"],
+              ["open", "Open"],
+              ["resolved", "Resolved"],
+              ["ignored", "Ignored"],
+            ]}
+          />
         </div>
+
+        <details className="advanced-filters">
+          <summary>Advanced filters</summary>
+          <div className="advanced-filter-grid">
+            <TextFilter
+              label="Application"
+              value={filters.appName}
+              onChange={(value) => setFilter("appName", value)}
+            />
+            <TextFilter
+              label="Task type"
+              value={filters.taskType}
+              onChange={(value) => setFilter("taskType", value)}
+            />
+            <TextFilter
+              label="Model"
+              value={filters.model}
+              onChange={(value) => setFilter("model", value)}
+            />
+            <TextFilter
+              label="Prompt version"
+              value={filters.promptVersion}
+              onChange={(value) => setFilter("promptVersion", value)}
+            />
+            <TextFilter
+              label="Service version"
+              value={filters.serviceVersion}
+              onChange={(value) => setFilter("serviceVersion", value)}
+            />
+            <Select
+              label="Errors"
+              value={filters.hasErrors}
+              onChange={(value) =>
+                setFilter("hasErrors", value as TraceFilters["hasErrors"])
+              }
+              options={[
+                ["all", "Any result"],
+                ["true", "Only runs with errors"],
+                ["false", "Only clean runs"],
+              ]}
+            />
+          </div>
+        </details>
 
         <div className="table-summary">
           <div className="filter-tabs" role="group" aria-label="Status quick filters">
-            {(["all", "success", "failed", "partial"] as const).map((status) => (
+            {(["all", "failed", "success", "partial"] as const).map((status) => (
               <button
-                className={statusFilter === status ? "active" : ""}
+                className={filters.status === status ? "active" : ""}
                 key={status}
                 type="button"
-                onClick={() => setStatusFilter(status)}
+                onClick={() => setFilter("status", status)}
               >
                 {status === "all" ? "All traces" : statusLabel(status)}
               </button>
             ))}
           </div>
-          <span>
-            {loading ? "Loading traces…" : `${traces.length} results`}
-          </span>
+          <span>{loading ? "Loading traces…" : `${traces.length} loaded`}</span>
         </div>
 
         {error === null ? null : (
@@ -185,6 +245,7 @@ export function TraceListPage({
               <tr>
                 <th>Status</th>
                 <th>Run</th>
+                <th>Review</th>
                 <th>Task</th>
                 <th>Model</th>
                 <th>Steps</th>
@@ -210,6 +271,11 @@ export function TraceListPage({
                     </button>
                   </td>
                   <td>
+                    <span className={`review-state ${trace.reviewStatus}`}>
+                      {reviewLabel(trace.reviewStatus)}
+                    </span>
+                  </td>
+                  <td>
                     <TypeTag>{trace.taskType}</TypeTag>
                   </td>
                   <td>
@@ -226,20 +292,89 @@ export function TraceListPage({
           {!loading && traces.length === 0 ? (
             <div className="empty-result">
               <Search size={20} />
-              <strong>
-                {allTraces.length === 0
-                  ? "No traces ingested yet"
-                  : "No matching traces"}
-              </strong>
-              <span>
-                {allTraces.length === 0
-                  ? "Run the test agent to create the first live trace."
-                  : "Try clearing one of the filters."}
-              </span>
+              <strong>No matching traces</strong>
+              <span>Try widening the time range or clearing a filter.</span>
             </div>
           ) : null}
         </div>
+
+        {hasMore ? (
+          <div className="table-pagination">
+            <button
+              className="button secondary compact"
+              type="button"
+              onClick={onLoadMore}
+              disabled={loadingMore}
+            >
+              {loadingMore ? "Loading…" : "Load more"}
+            </button>
+          </div>
+        ) : null}
       </section>
     </div>
   );
+}
+
+function Select({
+  label,
+  value,
+  onChange,
+  options,
+}: {
+  label: string;
+  value: string;
+  onChange: (value: string) => void;
+  options: Array<[string, string]>;
+}) {
+  return (
+    <label className="select-field">
+      <span>{label}</span>
+      <select
+        aria-label={`${label} filter`}
+        value={value}
+        onChange={(event) => onChange(event.target.value)}
+      >
+        {options.map(([optionValue, optionLabel]) => (
+          <option key={optionValue} value={optionValue}>
+            {optionLabel}
+          </option>
+        ))}
+      </select>
+      <ChevronDown size={14} />
+    </label>
+  );
+}
+
+function TextFilter({
+  label,
+  value,
+  onChange,
+}: {
+  label: string;
+  value: string;
+  onChange: (value: string) => void;
+}) {
+  return (
+    <label className="text-filter">
+      <span>{label}</span>
+      <input
+        value={value}
+        onChange={(event) => onChange(event.target.value)}
+        placeholder={`Filter ${label.toLowerCase()}`}
+      />
+    </label>
+  );
+}
+
+function reviewLabel(status: TraceView["reviewStatus"]): string {
+  switch (status) {
+    case "resolved":
+      return "Resolved";
+    case "ignored":
+      return "Ignored";
+    case "open":
+      return "Open";
+    default:
+      return "Unreviewed";
+  }
 }

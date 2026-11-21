@@ -46,6 +46,17 @@ export class InvalidOtlpBatchError extends Error {
   }
 }
 
+export function isSpanBeyondLateness(
+  spanEnd: Date,
+  receivedAt: Date,
+  maxLatenessHours: number,
+): boolean {
+  return (
+    spanEnd.getTime() <
+    receivedAt.getTime() - maxLatenessHours * 60 * 60 * 1000
+  );
+}
+
 export function createOtlpIngestService(
   codec: OtlpCodec,
   writer: TraceBatchWriter,

@@ -2,7 +2,10 @@ import { createHash, randomUUID } from "node:crypto";
 
 import type { Pool } from "pg";
 
-import type { IngestBatchWrite } from "../../application/ingest.js";
+import {
+  isSpanBeyondLateness,
+  type IngestBatchWrite,
+} from "../../application/ingest.js";
 import { durationMilliseconds, unixNanoToDate } from "../otlp/time.js";
 
 export interface PersistBatchResult {
@@ -12,9 +15,14 @@ export interface PersistBatchResult {
   ownerApp: string;
 }
 
+export interface PersistBatchOptions {
+  maxLatenessHours: number;
+}
+
 export async function persistBatch(
   pool: Pool,
   input: IngestBatchWrite,
+  options: PersistBatchOptions,
 ): Promise<PersistBatchResult> {
   const client = await pool.connect();
   const batchId = randomUUID();
@@ -25,6 +33,7 @@ export async function persistBatch(
   const payloadDigest = createHash("sha256")
     .update(input.payload)
     .digest("hex");
+  const receivedNow = Date.now();
 
   try {
     await client.query("begin");
@@ -44,6 +53,7 @@ export async function persistBatch(
 
     let acceptedCount = 0;
     let conflictCount = 0;
+    let lateCount = 0;
     const traceIds = new Set<string>();
     for (const span of input.spans) {
       const startTime = unixNanoToDate(span.startTimeUnixNano);
@@ -53,6 +63,28 @@ export async function persistBatch(
         span.endTimeUnixNano,
       );
       const attributes = span.attributes;
+
+      if (
+        isSpanBeyondLateness(
+          endTime,
+          new Date(receivedNow),
+          options.maxLatenessHours,
+        )
+      ) {
+        lateCount += 1;
+        await client.query(
+          `insert into ingest_rejects (
+            batch_id, trace_id, span_id, reason
+          ) values ($1, $2, $3, $4)`,
+          [
+            batchId,
+            span.traceId,
+            span.spanId,
+            `span exceeded maximum lateness of ${options.maxLatenessHours} hour(s)`,
+          ],
+        );
+        continue;
+      }
 
       const inserted = await client.query<{ trace_id: string }>(
         `insert into spans (
@@ -163,17 +195,20 @@ export async function persistBatch(
     for (const traceId of traceIds) {
       await client.query(
         `insert into trace_aggregation_jobs (
-          trace_id, state, requested_at
-        ) values ($1, 'pending', now())
+          trace_id, state, requested_at, not_before
+        ) values ($1, 'pending', now(), now())
         on conflict (trace_id) do update set
           state = 'pending',
           requested_at = now(),
+          not_before = now(),
+          completed_at = null,
+          attempt_count = 0,
           last_error = null`,
         [traceId],
       );
     }
 
-    const rejectedCount = input.rejected.length + conflictCount;
+    const rejectedCount = input.rejected.length + conflictCount + lateCount;
     for (const rejected of input.rejected) {
       await client.query(
         `insert into ingest_rejects (

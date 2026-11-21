@@ -47,12 +47,21 @@ export interface AggregatedTrace {
   outputTokens: number;
   costMicros: number;
   completeness: "complete" | "incomplete";
-  ingestState: "sealed_complete" | "sealed_partial";
+  ingestState: "open" | "sealed_complete" | "sealed_partial";
+  sealedAt: Date | null;
+  sealAfter: Date | null;
+}
+
+export interface TraceAggregationClock {
+  now: Date;
+  rootSealGraceMs: number;
+  idleTimeoutMs: number;
 }
 
 export function aggregateTraceSpans(
   traceId: string,
   spans: StoredTraceSpan[],
+  clock: TraceAggregationClock,
 ): AggregatedTrace {
   const root =
     spans.find((span) => span.span_type === "agent.run") ?? undefined;
@@ -79,6 +88,17 @@ export function aggregateTraceSpans(
     (firstLlm === undefined
       ? null
       : stringValue(firstLlm.attributes["agent.prompt.version"]) ?? null);
+  const sealAfter =
+    root === undefined
+      ? new Date(lastSpan.end_time.getTime() + clock.idleTimeoutMs)
+      : new Date(root.end_time.getTime() + clock.rootSealGraceMs);
+  const sealed = clock.now >= sealAfter;
+  const ingestState =
+    !sealed
+      ? "open"
+      : root === undefined
+        ? "sealed_partial"
+        : "sealed_complete";
 
   return {
     traceId,
@@ -109,7 +129,9 @@ export function aggregateTraceSpans(
     outputTokens: sumNumeric(spans, "output_tokens"),
     costMicros: sumNumeric(spans, "cost_micros"),
     completeness: root === undefined ? "incomplete" : "complete",
-    ingestState: root === undefined ? "sealed_partial" : "sealed_complete",
+    ingestState,
+    sealedAt: sealed ? clock.now : null,
+    sealAfter: sealed ? null : sealAfter,
   };
 }
 

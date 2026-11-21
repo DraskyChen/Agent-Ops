@@ -2,7 +2,7 @@
 
 [English](architecture.md)
 
-状态：实施中（MVP 纵向切片）  
+状态：实施中（运维审查阶段）
 范围：私有化 Agent 可观测平台，以及轻量 TypeScript/Python SDK
 
 代码模块边界和可执行约束见 [代码架构](code-architecture.zh-CN.md)。
@@ -314,8 +314,14 @@ GET  /api/v1/traces
 GET  /api/v1/traces/:traceId
 GET  /api/v1/content/:contentId
 POST /api/v1/feedback
+POST /api/v1/traces/:traceId/reviews
+GET  /api/v1/operations/ingest
+GET  /api/v1/me
 POST /api/v1/scores
 ```
+
+`/api/v1/scores` 保留给后续评测阶段。用户 Feedback 使用应用凭证并通过
+`event_id` 保证幂等；内部 Review 使用人类 OIDC 身份并且只追加。
 
 Trace 详情返回不透明内容 ID 和内容可用状态。内容接口校验独立的内容查看权限、记录访问审计，并以流式方式返回对象，避免将完整载荷一次性加载到内存。前端永远不会获得对象存储凭证或内部 Bucket Key。
 
@@ -329,6 +335,8 @@ Trace 列表筛选条件：
 - 模型和 Prompt 版本。
 - 会话 ID。
 - 是否存在错误。
+- 审查状态。
+- 时间范围与游标。
 
 Trace 详情返回：
 
@@ -429,7 +437,19 @@ feedback
   id                     uuid primary key
   trace_id               text
   span_id                text nullable
+  event_id               text nullable
+  actor_ref              text nullable
   type                   text
+  comment                text nullable
+  created_at             timestamptz
+
+trace_reviews
+  id                     uuid primary key
+  trace_id               text
+  reviewer_subject       text
+  reviewer_name          text
+  status                 text
+  issue_area             text nullable
   comment                text nullable
   created_at             timestamptz
 
@@ -467,6 +487,23 @@ content_objects
   status                 text
   created_at             timestamptz
   expires_at             timestamptz nullable
+
+content_access_log
+  id                     uuid primary key
+  content_id             uuid
+  actor_subject          text nullable
+  decision               text
+  reason                 text nullable
+  created_at             timestamptz
+
+auth_sessions
+  session_hash           text primary key
+  subject                text
+  display_name           text
+  email                  text nullable
+  role                   text
+  expires_at             timestamptz
+  created_at             timestamptz
 
 ingest_batches
   batch_id               uuid primary key

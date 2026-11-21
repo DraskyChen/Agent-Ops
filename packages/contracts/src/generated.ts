@@ -17,7 +17,7 @@ export const ENUMS = {
   feedbackType: ["thumbs_up", "thumbs_down", "retry", "abandon", "comment"] as const,
   environment: ["prod", "staging", "dev", "test"] as const,
   traceIngestState: ["open", "sealed_complete", "sealed_partial"] as const,
-  contentStatus: ["uploading", "available", "quarantined", "unavailable", "deleted"] as const,
+  contentStatus: ["uploading", "available", "quarantined", "unavailable", "expired", "deleted"] as const,
 } as const;
 
 export type ContentRecorded = (typeof ENUMS.contentRecorded)[number];
