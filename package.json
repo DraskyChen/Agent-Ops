@@ -1,0 +1,30 @@
+{
+  "name": "agent-ops",
+  "private": true,
+  "packageManager": "pnpm@12.15.0",
+  "engines": {
+    "node": ">=24"
+  },
+  "scripts": {
+    "architecture:check": "node scripts/check-architecture.mjs",
+    "build": "pnpm -r --workspace-concurrency=1 --if-present build",
+    "check": "pnpm contracts:generate && pnpm architecture:check && pnpm typecheck && pnpm test && pnpm lint:python && pnpm typecheck:python && pnpm test:python",
+    "contracts:generate": "pnpm --filter @agent-ops/contracts generate",
+    "dev": "pnpm -r --parallel --if-present dev",
+    "dev:server": "pnpm --filter @agent-ops/server dev",
+    "dev:web": "pnpm --filter @agent-ops/web dev",
+    "db:migrate": "pnpm --filter @agent-ops/server db:migrate",
+    "content:rekey": "pnpm --filter @agent-ops/server content:rekey",
+    "examples:ts": "pnpm --filter @agent-ops/example-typescript start",
+    "examples:python": "uv run --project examples/python python examples/python/run_all.py",
+    "infra:up": "docker compose -f infra/docker-compose/compose.yaml up -d",
+    "infra:down": "docker compose -f infra/docker-compose/compose.yaml down",
+    "format:check": "pnpm -r --if-present format:check",
+    "lint:python": "uv run --project packages/sdk-python ruff check packages/sdk-python",
+    "test": "pnpm -r --if-present test",
+    "test:python": "uv run --project packages/sdk-python pytest -q",
+    "typecheck": "pnpm -r --workspace-concurrency=1 --if-present typecheck",
+    "typecheck:python": "uv run --project packages/sdk-python mypy packages/sdk-python/src/agent_ops"
+  }
+}
+

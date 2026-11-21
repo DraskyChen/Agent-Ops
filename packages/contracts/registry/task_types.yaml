@@ -1,0 +1,9 @@
+# Approved low-cardinality task types. Add or change entries through review.
+task_types:
+  - refund
+  - support
+  - research
+  - code_change
+  - data_analysis
+  - other
+

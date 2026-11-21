@@ -1,0 +1,26 @@
+{
+  "name": "@agent-ops/example-typescript",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "build": "tsc -p tsconfig.json",
+    "start": "tsx src/cli.ts",
+    "start:refund": "tsx src/cli.ts refund",
+    "start:tool-failure": "tsx src/cli.ts tool-failure",
+    "start:retrieval": "tsx src/cli.ts retrieval",
+    "start:multi-agent": "tsx src/cli.ts multi-agent",
+    "start:deepseek": "tsx src/cli.ts deepseek",
+    "typecheck": "tsc -p tsconfig.json --noEmit"
+  },
+  "dependencies": {
+    "@agent-ops/sdk": "workspace:*",
+    "openai": "7.62.0"
+  },
+  "devDependencies": {
+    "@types/node": "^24.0.0",
+    "tsx": "4.23.15",
+    "typescript": "7.0.2"
+  }
+}
+

@@ -1,0 +1,30 @@
+{
+  "name": "@agent-ops/server",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "build": "tsc -p tsconfig.json",
+    "content:rekey": "tsx src/scripts/rekey-content.ts",
+    "db:migrate": "tsx src/db/migrate.ts",
+    "dev": "tsx watch src/main.ts",
+    "start": "node dist/main.js",
+    "test": "vitest run",
+    "typecheck": "tsc -p tsconfig.json --noEmit"
+  },
+  "dependencies": {
+    "@agent-ops/contracts": "workspace:*",
+    "fastify": "5.12.8",
+    "minio": "8.0.7",
+    "pg": "8.23.1",
+    "protobufjs": "8.8.1"
+  },
+  "devDependencies": {
+    "@types/node": "^24.0.0",
+    "@types/pg": "8.23.1",
+    "tsx": "4.23.15",
+    "typescript": "7.0.2",
+    "vitest": "5.1.1"
+  }
+}
+

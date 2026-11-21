@@ -1,0 +1,27 @@
+[build-system]
+requires = ["setuptools>=75"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "agent-ops-python-examples"
+version = "0.1.0"
+requires-python = ">=3.11"
+dependencies = [
+  "agent-ops-sdk",
+  "openai>=2,<3",
+  "python-dotenv>=1.1,<2",
+]
+
+[tool.uv.sources]
+agent-ops-sdk = { path = "../../packages/sdk-python", editable = true }
+
+[tool.setuptools]
+py-modules = [
+  "async_agent",
+  "deepseek",
+  "refund",
+  "run_all",
+  "shared",
+  "tool_failure",
+]
+

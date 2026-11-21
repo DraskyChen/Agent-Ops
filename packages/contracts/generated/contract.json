@@ -1,0 +1,569 @@
+{
+  "schema_version": "0.1",
+  "namespace_prefix": "agent",
+  "enums": {
+    "content_recorded": [
+      "full",
+      "metadata_only"
+    ],
+    "span_type": [
+      "agent.run",
+      "agent.step",
+      "llm.call",
+      "tool.call",
+      "retrieval",
+      "sub_agent",
+      "custom"
+    ],
+    "run_status": [
+      "success",
+      "failed",
+      "partial",
+      "cancelled",
+      "timeout"
+    ],
+    "stop_reason": [
+      "final_answer",
+      "max_steps",
+      "error",
+      "user_abort",
+      "budget_exceeded"
+    ],
+    "error_category": [
+      "model",
+      "tool",
+      "timeout",
+      "rate_limit",
+      "validation",
+      "policy",
+      "other"
+    ],
+    "tool_type": [
+      "function",
+      "mcp",
+      "http",
+      "code_exec",
+      "browser",
+      "other"
+    ],
+    "score_source": [
+      "rule",
+      "llm",
+      "human",
+      "user"
+    ],
+    "feedback_type": [
+      "thumbs_up",
+      "thumbs_down",
+      "retry",
+      "abandon",
+      "comment"
+    ],
+    "environment": [
+      "prod",
+      "staging",
+      "dev",
+      "test"
+    ],
+    "trace_ingest_state": [
+      "open",
+      "sealed_complete",
+      "sealed_partial"
+    ],
+    "content_status": [
+      "uploading",
+      "available",
+      "quarantined",
+      "unavailable",
+      "deleted"
+    ]
+  },
+  "resource_attributes": [
+    {
+      "name": "service.name",
+      "type": "string",
+      "req": "required"
+    },
+    {
+      "name": "service.version",
+      "type": "string",
+      "req": "required"
+    },
+    {
+      "name": "deployment.environment.name",
+      "type": "string",
+      "req": "required",
+      "enum": "environment"
+    },
+    {
+      "name": "agent.app.name",
+      "type": "string",
+      "req": "required"
+    },
+    {
+      "name": "agent.team",
+      "type": "string",
+      "req": "recommended"
+    },
+    {
+      "name": "agent.sdk.name",
+      "type": "string",
+      "req": "required"
+    },
+    {
+      "name": "agent.sdk.version",
+      "type": "string",
+      "req": "required"
+    },
+    {
+      "name": "agent.schema.version",
+      "type": "string",
+      "req": "required"
+    }
+  ],
+  "common_attributes": [
+    {
+      "name": "agent.span.type",
+      "type": "string",
+      "req": "required",
+      "enum": "span_type"
+    },
+    {
+      "name": "error.type",
+      "type": "string",
+      "req": "required_on_error"
+    },
+    {
+      "name": "agent.error.category",
+      "type": "string",
+      "req": "recommended_on_error",
+      "enum": "error_category",
+      "cardinality": "low"
+    },
+    {
+      "name": "agent.content.recorded",
+      "type": "string",
+      "req": "required",
+      "enum": "content_recorded"
+    },
+    {
+      "name": "agent.redaction.applied",
+      "type": "string",
+      "req": "recommended"
+    },
+    {
+      "name": "agent.input.ref",
+      "type": "string",
+      "req": "optional"
+    },
+    {
+      "name": "agent.output.ref",
+      "type": "string",
+      "req": "optional"
+    },
+    {
+      "name": "agent.input.summary",
+      "type": "string",
+      "req": "optional",
+      "max_chars": 256
+    },
+    {
+      "name": "agent.output.summary",
+      "type": "string",
+      "req": "optional",
+      "max_chars": 256
+    },
+    {
+      "name": "agent.span.subtype",
+      "type": "string",
+      "req": "required_if_custom"
+    }
+  ],
+  "span_types": {
+    "agent.run": {
+      "attributes": [
+        {
+          "name": "agent.session.id",
+          "type": "string",
+          "req": "required"
+        },
+        {
+          "name": "agent.run.id",
+          "type": "string",
+          "req": "recommended"
+        },
+        {
+          "name": "agent.user.id",
+          "type": "string",
+          "req": "recommended"
+        },
+        {
+          "name": "agent.task.type",
+          "type": "string",
+          "req": "required",
+          "cardinality": "low",
+          "validate": "^[a-z][a-z0-9_]{1,31}$"
+        },
+        {
+          "name": "agent.prompt.version",
+          "type": "string",
+          "req": "recommended"
+        },
+        {
+          "name": "agent.run.status",
+          "type": "string",
+          "req": "required",
+          "enum": "run_status"
+        },
+        {
+          "name": "agent.run.stop_reason",
+          "type": "string",
+          "req": "recommended",
+          "enum": "stop_reason"
+        },
+        {
+          "name": "agent.run.steps",
+          "type": "int",
+          "req": "auto"
+        },
+        {
+          "name": "agent.run.tokens.input",
+          "type": "int",
+          "req": "auto"
+        },
+        {
+          "name": "agent.run.tokens.output",
+          "type": "int",
+          "req": "auto"
+        },
+        {
+          "name": "agent.run.cost.total",
+          "type": "int",
+          "req": "auto",
+          "unit": "micro_currency"
+        },
+        {
+          "name": "agent.cost.currency",
+          "type": "string",
+          "req": "auto"
+        }
+      ]
+    },
+    "agent.step": {
+      "attributes": [
+        {
+          "name": "agent.step.index",
+          "type": "int",
+          "req": "recommended"
+        }
+      ]
+    },
+    "llm.call": {
+      "attributes": [
+        {
+          "name": "gen_ai.provider.name",
+          "type": "string",
+          "req": "required"
+        },
+        {
+          "name": "gen_ai.request.model",
+          "type": "string",
+          "req": "required"
+        },
+        {
+          "name": "gen_ai.response.model",
+          "type": "string",
+          "req": "recommended"
+        },
+        {
+          "name": "gen_ai.usage.input_tokens",
+          "type": "int",
+          "req": "required"
+        },
+        {
+          "name": "gen_ai.usage.output_tokens",
+          "type": "int",
+          "req": "required"
+        },
+        {
+          "name": "gen_ai.request.temperature",
+          "type": "double",
+          "req": "optional"
+        },
+        {
+          "name": "gen_ai.request.top_p",
+          "type": "double",
+          "req": "optional"
+        },
+        {
+          "name": "gen_ai.request.max_tokens",
+          "type": "int",
+          "req": "optional"
+        },
+        {
+          "name": "gen_ai.response.finish_reasons",
+          "type": "string_array",
+          "req": "recommended"
+        },
+        {
+          "name": "agent.llm.tokens.cached",
+          "type": "int",
+          "req": "recommended"
+        },
+        {
+          "name": "agent.llm.tokens.reasoning",
+          "type": "int",
+          "req": "optional"
+        },
+        {
+          "name": "agent.llm.ttft_ms",
+          "type": "int",
+          "req": "recommended"
+        },
+        {
+          "name": "agent.llm.streaming",
+          "type": "bool",
+          "req": "recommended"
+        },
+        {
+          "name": "agent.llm.retry_count",
+          "type": "int",
+          "req": "recommended"
+        },
+        {
+          "name": "agent.prompt.id",
+          "type": "string",
+          "req": "recommended"
+        },
+        {
+          "name": "agent.prompt.version",
+          "type": "string",
+          "req": "recommended"
+        },
+        {
+          "name": "agent.llm.cost",
+          "type": "int",
+          "req": "optional",
+          "unit": "micro_currency"
+        }
+      ]
+    },
+    "tool.call": {
+      "attributes": [
+        {
+          "name": "agent.tool.name",
+          "type": "string",
+          "req": "required",
+          "cardinality": "low"
+        },
+        {
+          "name": "agent.tool.type",
+          "type": "string",
+          "req": "recommended",
+          "enum": "tool_type"
+        },
+        {
+          "name": "agent.tool.call_id",
+          "type": "string",
+          "req": "recommended"
+        },
+        {
+          "name": "agent.tool.args.summary",
+          "type": "string",
+          "req": "optional",
+          "max_chars": 256
+        },
+        {
+          "name": "agent.tool.retry_count",
+          "type": "int",
+          "req": "recommended"
+        },
+        {
+          "name": "agent.tool.error.retryable",
+          "type": "bool",
+          "req": "recommended_on_error"
+        }
+      ]
+    },
+    "retrieval": {
+      "attributes": [
+        {
+          "name": "agent.retrieval.source",
+          "type": "string",
+          "req": "recommended"
+        },
+        {
+          "name": "agent.retrieval.query.summary",
+          "type": "string",
+          "req": "optional",
+          "max_chars": 256
+        },
+        {
+          "name": "agent.retrieval.top_k",
+          "type": "int",
+          "req": "recommended"
+        },
+        {
+          "name": "agent.retrieval.result_count",
+          "type": "int",
+          "req": "recommended"
+        },
+        {
+          "name": "agent.retrieval.doc_ids",
+          "type": "string_array",
+          "req": "optional",
+          "max_items": 20
+        },
+        {
+          "name": "agent.retrieval.scores",
+          "type": "double_array",
+          "req": "optional",
+          "max_items": 20
+        }
+      ]
+    },
+    "sub_agent": {
+      "attributes": [
+        {
+          "name": "agent.sub_agent.name",
+          "type": "string",
+          "req": "required"
+        },
+        {
+          "name": "agent.sub_agent.role",
+          "type": "string",
+          "req": "recommended"
+        }
+      ]
+    }
+  },
+  "decisions": {
+    "prefix": "agent.*; replace globally with a company prefix if required",
+    "task_type_registry": "registry/task_types.yaml, changed through review; unknown values degrade to other",
+    "run_status": "set explicitly by application code; quality is represented separately by score",
+    "content_policy": "approved production tasks capture full content; restricted tasks use metadata_only",
+    "cost": "SDK reports tokens; ingest and workers use an insert-only, effective-time price table",
+    "naming": "llm.call uses official gen_ai.* attributes; Agent Ops extensions use agent.*"
+  },
+  "conventions": {
+    "naming": "lowercase, dot-separated, underscore-delimited words",
+    "time": "OTel nanosecond timestamps; latency attributes use integer milliseconds",
+    "money": "integer micro-units of the declared currency",
+    "unknown_attributes": "redact, size-limit, and preserve in an extension object",
+    "unknown_span_type": "degrade to custom without rejecting the span",
+    "team_extension_namespace": "agent.x.<team>.*",
+    "immutable_after_end": true,
+    "forbidden_in_attributes": [
+      "full prompt or response text",
+      "plaintext user identifiers",
+      "credentials and secrets",
+      "complete URL query strings",
+      "unredacted personal data"
+    ]
+  },
+  "limits": {
+    "summary_max_chars": 256,
+    "array_max_items": 20,
+    "attribute_value_max_chars": 1024
+  },
+  "requirement_levels": [
+    "required",
+    "recommended",
+    "optional",
+    "auto",
+    "required_on_error",
+    "recommended_on_error",
+    "required_if_custom"
+  ],
+  "conformance_levels": {
+    "L0": {
+      "description": "Coarse: one agent.run span",
+      "requires_span_types": [
+        "agent.run"
+      ]
+    },
+    "L1": {
+      "description": "Standard: agent.run with LLM and tool child spans",
+      "requires_span_types": [
+        "agent.run",
+        "llm.call",
+        "tool.call"
+      ]
+    },
+    "L2": {
+      "description": "Complete: content references, events, scores, and feedback",
+      "requires_span_types": [
+        "agent.run",
+        "llm.call",
+        "tool.call"
+      ],
+      "requires_capabilities": [
+        "content_reference",
+        "span_events",
+        "score",
+        "feedback"
+      ]
+    }
+  },
+  "span_events": [
+    {
+      "name": "agent.plan",
+      "attributes": [
+        "agent.output.summary"
+      ]
+    },
+    {
+      "name": "agent.guardrail.triggered",
+      "attributes": [
+        "agent.guardrail.rule",
+        "agent.guardrail.action"
+      ]
+    }
+  ],
+  "side_channel": {
+    "feedback": {
+      "fields": [
+        "trace_id",
+        "span_id",
+        "type",
+        "comment",
+        "created_at"
+      ]
+    },
+    "score": {
+      "fields": [
+        "trace_id",
+        "span_id",
+        "name",
+        "value",
+        "source",
+        "evaluator_version",
+        "comment",
+        "created_at"
+      ]
+    }
+  },
+  "versioning": {
+    "scheme": "major.minor",
+    "minor": "add optional fields",
+    "major": "change required fields or semantics",
+    "ingest_supports": "the latest two major versions",
+    "deprecation": "dual-write during one full release cycle"
+  },
+  "external_mapping": {
+    "sources": [
+      "otel_genai",
+      "openinference",
+      "openllmetry"
+    ],
+    "status": "planned"
+  },
+  "task_types": [
+    "refund",
+    "support",
+    "research",
+    "code_change",
+    "data_analysis",
+    "other"
+  ]
+}

@@ -1,0 +1,188 @@
+import { createHash, randomUUID } from "node:crypto";
+import type { Readable } from "node:stream";
+
+import type {
+  ContentRecorded,
+  ContentStatus,
+} from "@agent-ops/contracts";
+
+export interface ContentUploadInput {
+  ownerApp: string;
+  contentKind: string;
+  mediaType: string;
+  captureMode: ContentRecorded;
+  redactionRuleVersion: string;
+  body: Uint8Array;
+}
+
+export interface ContentRecord {
+  contentId: string;
+  objectKey: string;
+  ownerApp: string;
+  contentKind: string;
+  mediaType: string;
+  captureMode: ContentRecorded;
+  sizeBytes: number;
+  sha256: string;
+  redactionRuleVersion: string;
+  encryption: string;
+  status: ContentStatus;
+  expiresAt: Date | null;
+}
+
+export interface StoredContent {
+  metadata: ContentRecord;
+  body: Readable;
+}
+
+export interface ContentBlobStore {
+  put(objectKey: string, mediaType: string, body: Uint8Array): Promise<void>;
+  get(objectKey: string): Promise<Readable>;
+  delete(objectKey: string): Promise<void>;
+}
+
+export interface ContentRepository {
+  insert(record: ContentRecord): Promise<void>;
+  find(contentId: string): Promise<ContentRecord | null>;
+}
+
+export interface ContentService {
+  upload(input: ContentUploadInput): Promise<ContentRecord>;
+  get(contentId: string): Promise<StoredContent | null>;
+}
+
+export interface ContentServiceOptions {
+  maxBytes: number;
+  retentionDays: number;
+}
+
+export class ContentTooLargeError extends Error {
+  constructor(maxBytes: number) {
+    super(`Content exceeds the ${maxBytes} byte limit`);
+    this.name = "ContentTooLargeError";
+  }
+}
+
+export class InvalidContentError extends Error {
+  constructor(message: string) {
+    super(message);
+    this.name = "InvalidContentError";
+  }
+}
+
+export function createContentService(
+  blobs: ContentBlobStore,
+  repository: ContentRepository,
+  options: ContentServiceOptions,
+): ContentService {
+  return {
+    async upload(input) {
+      validateUpload(input, options.maxBytes);
+      const contentId = randomUUID();
+      const now = new Date();
+      const extension = contentFileExtension(input.mediaType);
+      const objectKey = [
+        "content",
+        String(now.getUTCFullYear()),
+        String(now.getUTCMonth() + 1).padStart(2, "0"),
+        String(now.getUTCDate()).padStart(2, "0"),
+        `${contentId}.${extension}`,
+      ].join("/");
+      const record: ContentRecord = {
+        contentId,
+        objectKey,
+        ownerApp: input.ownerApp,
+        contentKind: input.contentKind,
+        mediaType: input.mediaType,
+        captureMode: input.captureMode,
+        sizeBytes: input.body.byteLength,
+        sha256: createHash("sha256").update(input.body).digest("hex"),
+        redactionRuleVersion: input.redactionRuleVersion,
+        encryption: "deployment-managed",
+        status: "available",
+        expiresAt: new Date(
+          now.getTime() + options.retentionDays * 24 * 60 * 60 * 1000,
+        ),
+      };
+
+      await blobs.put(objectKey, input.mediaType, input.body);
+      try {
+        await repository.insert(record);
+      } catch (error) {
+        await blobs.delete(objectKey).catch(() => undefined);
+        throw error;
+      }
+      return record;
+    },
+
+    async get(contentId) {
+      const metadata = await repository.find(contentId);
+      if (metadata === null || metadata.status !== "available") {
+        return null;
+      }
+      return {
+        metadata,
+        body: await blobs.get(metadata.objectKey),
+      };
+    },
+  };
+}
+
+export function contentFileExtension(mediaType: string): string {
+  const normalized = mediaType.toLowerCase();
+  if (normalized.includes("json")) {
+    return "json";
+  }
+  if (normalized.startsWith("text/markdown")) {
+    return "md";
+  }
+  if (normalized.startsWith("text/csv")) {
+    return "csv";
+  }
+  if (normalized.startsWith("text/html")) {
+    return "html";
+  }
+  if (normalized.startsWith("text/plain")) {
+    return "txt";
+  }
+  if (normalized === "application/pdf") {
+    return "pdf";
+  }
+  if (normalized === "image/png") {
+    return "png";
+  }
+  if (normalized === "image/jpeg") {
+    return "jpg";
+  }
+  if (normalized === "image/webp") {
+    return "webp";
+  }
+  return "bin";
+}
+
+function validateUpload(input: ContentUploadInput, maxBytes: number): void {
+  if (input.body.byteLength === 0) {
+    throw new InvalidContentError("Content body is required");
+  }
+  if (input.body.byteLength > maxBytes) {
+    throw new ContentTooLargeError(maxBytes);
+  }
+  if (input.captureMode !== "full") {
+    throw new InvalidContentError(
+      "Content uploads require captureMode=full",
+    );
+  }
+  if (!/^[\w.-]{1,64}$/.test(input.contentKind)) {
+    throw new InvalidContentError("Invalid contentKind");
+  }
+  if (!/^(text|application|image|audio|video)\//.test(input.mediaType)) {
+    throw new InvalidContentError("Unsupported mediaType");
+  }
+  if (input.ownerApp.trim() === "") {
+    throw new InvalidContentError("ownerApp is required");
+  }
+  if (input.redactionRuleVersion.trim() === "") {
+    throw new InvalidContentError("redactionRuleVersion is required");
+  }
+}
+
