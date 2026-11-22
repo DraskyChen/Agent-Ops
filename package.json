@@ -9,6 +9,7 @@
     "architecture:check": "node scripts/check-architecture.mjs",
     "build": "pnpm -r --workspace-concurrency=1 --if-present build",
     "check": "pnpm typecheck && pnpm architecture:check && pnpm test && pnpm lint:python && pnpm typecheck:python && pnpm test:python",
+    "capacity:test": "pnpm --filter @agent-ops/server capacity:test",
     "contracts:build": "pnpm --filter @agent-ops/contracts build",
     "contracts:generate": "pnpm --filter @agent-ops/contracts generate",
     "dev": "pnpm -r --parallel --if-present dev",

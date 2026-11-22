@@ -62,12 +62,14 @@ Implemented:
 - A single-team production Compose file, multi-stage application image, Nginx
   reverse proxy, and automatic migration service. Image build verification
   still requires Docker Hub connectivity.
+- A recorded one-day, one-million-span database baseline for trace persistence,
+  list/search/detail latency, and storage.
 - Independent PostgreSQL and MinIO development stack.
 
 Not implemented yet:
 
-- Container build/startup verification, production capacity validation,
-  backup/restore, and release acceptance.
+- Container build/startup verification, warmed 30-day/concurrent OTLP capacity
+  validation, backup/restore, and release acceptance.
 
 ## Local development
 
@@ -100,6 +102,11 @@ Pass `--from` and `--to` ISO timestamps to limit a rebuild.
 `pnpm metrics:load-test` requires `METRICS_LOAD_TEST_DATABASE_URL` and a server
 connected to the same disposable database. It refuses to run without that
 explicit override.
+
+`pnpm capacity:test` uses `CAPACITY_TEST_DATABASE_URL` to load a disposable
+database with one million spans by default and measure trace persistence,
+list/search/detail queries, and storage. Capacity test rows are automatically
+removed. See [the capacity baseline](docs/capacity.md) for results and limits.
 
 Python SDK:
 

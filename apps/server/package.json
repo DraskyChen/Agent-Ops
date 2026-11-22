@@ -5,6 +5,7 @@
   "type": "module",
   "scripts": {
     "build": "tsc -p tsconfig.json",
+    "capacity:test": "tsx src/scripts/capacity-test.ts",
     "content:rekey": "tsx src/scripts/rekey-content.ts",
     "db:migrate": "tsx src/db/migrate.ts",
     "dev": "tsx watch src/main.ts",

@@ -788,7 +788,9 @@ inspect its inputs, outputs, model calls, and tool failure.
 
 Implemented in Phase 3: shared metric definitions, hourly rollups, estimated
 latency histograms, overview/breakdown APIs, and a dashboard with trace
-drill-down. Capacity evidence and metadata archive policy remain rollout work.
+drill-down. A one-day, one-million-span synthetic baseline is recorded in
+[the capacity report](capacity.md); a warmed 30-day dataset, concurrent OTLP
+traffic, archival, and restore measurements remain rollout work.
 
 Exit criterion: cost, status, latency, and tool failure rate use one agreed
 definition and can navigate to the underlying traces.

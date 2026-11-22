@@ -56,11 +56,12 @@ TypeScript 或 Python Agent
   成本、P95 延迟和逐用例差值。
 - 单团队生产 Compose、多阶段应用镜像、Nginx 反向代理和自动迁移服务；
   镜像实际构建仍需可访问 Docker Hub 的环境。
+- 独立数据库中的每天 100 万 Span 写入、列表、宽泛搜索、详情和存储基线。
 - 独立的 PostgreSQL 和 MinIO 开发环境。
 
 尚未完成：
 
-- 容器构建与启动验收、容量压测、备份恢复和正式上线验收。
+- 容器构建与启动验收、30 天热数据/OTLP 并发压测、备份恢复和正式上线验收。
 
 ## 本地开发
 
@@ -91,6 +92,10 @@ ISO 时间限制回填范围。
 
 `pnpm metrics:load-test` 必须显式设置 `METRICS_LOAD_TEST_DATABASE_URL`，
 并让 API 连接同一个一次性数据库，避免污染开发数据。
+
+`pnpm capacity:test` 使用 `CAPACITY_TEST_DATABASE_URL` 对一次性数据库执行
+Trace/Span 写入、列表、宽泛搜索和详情查询压测。默认目标为 100 万 Span，
+测试数据会自动清理；结果与限制见 [容量基线](docs/capacity.md)。
 
 Python SDK：
 
