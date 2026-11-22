@@ -170,6 +170,89 @@ export interface IngestHealthResponse {
   };
 }
 
+export type MetricsGranularity = "hour" | "six_hour" | "day";
+export type MetricsDimension =
+  | "app"
+  | "model"
+  | "taskType"
+  | "promptVersion"
+  | "serviceVersion";
+
+export interface MetricsQuery {
+  startedAfter?: string;
+  startedBefore?: string;
+  environment?: string;
+  appName?: string;
+  taskType?: string;
+  model?: string;
+  promptVersion?: string;
+  serviceVersion?: string;
+}
+
+export interface MetricsStatusCounts {
+  unknown: number;
+  success: number;
+  failed: number;
+  partial: number;
+  cancelled: number;
+  timeout: number;
+}
+
+export interface MetricsSummary {
+  traceCount: number;
+  finalizedTraceCount: number;
+  statusCounts: MetricsStatusCounts;
+  successRate: number | null;
+  failureRate: number | null;
+  costMicros: number;
+  inputTokens: number;
+  outputTokens: number;
+  toolErrorRate: number | null;
+  p50LatencyMs: number | null;
+  p95LatencyMs: number | null;
+  estimatedPercentiles: true;
+}
+
+export interface MetricsPoint extends MetricsSummary {
+  bucketStart: string;
+  bucketEnd: string;
+}
+
+export interface MetricsScope {
+  startedAfter: string;
+  startedBefore: string;
+  granularity: MetricsGranularity;
+  generatedAt: string;
+  dataThrough: string | null;
+}
+
+export interface MetricsOverviewResponse {
+  scope: MetricsScope;
+  summary: MetricsSummary;
+  series: MetricsPoint[];
+}
+
+export interface MetricsBreakdownQuery extends MetricsQuery {
+  dimension?: MetricsDimension;
+  limit?: number;
+}
+
+export interface MetricsBreakdownRow {
+  value: string;
+  traceCount: number;
+  costMicros: number;
+  p50LatencyMs: number | null;
+  p95LatencyMs: number | null;
+  toolErrorRate: number | null;
+  traceShare: number;
+}
+
+export interface MetricsBreakdownResponse {
+  scope: MetricsScope;
+  dimension: MetricsDimension;
+  items: MetricsBreakdownRow[];
+}
+
 export interface HealthResponse {
   status: "ok" | "degraded";
   schemaVersion: string;

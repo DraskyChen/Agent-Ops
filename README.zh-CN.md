@@ -40,6 +40,9 @@ TypeScript 或 Python Agent
 - OIDC 登录、本地开发身份，以及 `viewer`、`reviewer`、`admin` 角色。
 - 内容访问审计、过期清理和独立的内容查看权限。
 - Ingest 健康状态、拒收原因、聚合积压和 Web Operations 页面。
+- 基于 PostgreSQL 小时汇总和延迟直方图的共享 Trace 指标定义。
+- 展示数量、状态、成本、延迟、工具错误以及应用/模型/任务/版本分布的运维 Dashboard。
+- 支持从 Dashboard 按同一时间桶和结构化筛选条件下钻到 Trace 列表。
 - 真实 Trace 列表、详情、审查和内容查看控制台。
 - 独立的 PostgreSQL 和 MinIO 开发环境。
 
@@ -55,6 +58,7 @@ pnpm contracts:build
 pnpm architecture:check
 pnpm infra:up
 pnpm db:migrate
+pnpm metrics:backfill
 pnpm typecheck
 pnpm test
 pnpm test:integration
@@ -67,7 +71,14 @@ DOCKER_CONTEXT=orbstack pnpm infra:up
 ```
 
 `pnpm test:integration` 需要已执行迁移的 PostgreSQL 和 MinIO 开发环境，
-用于真实验证筛选、Feedback 幂等、Review、运维健康和过期内容审计。
+用于真实验证筛选、Feedback 幂等、Review、运维健康、过期内容审计、指标汇总和
+Dashboard 查询。
+
+`pnpm metrics:backfill` 从 Trace 投影重建小时指标；可用 `--from` 和 `--to`
+ISO 时间限制回填范围。
+
+`pnpm metrics:load-test` 必须显式设置 `METRICS_LOAD_TEST_DATABASE_URL`，
+并让 API 连接同一个一次性数据库，避免污染开发数据。
 
 Python SDK：
 

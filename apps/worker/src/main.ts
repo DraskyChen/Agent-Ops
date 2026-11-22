@@ -2,9 +2,11 @@ import pg from "pg";
 
 import { createTraceAggregationWorker } from "./application/aggregate-trace-job.js";
 import { createContentRetentionWorker } from "./application/content-retention.js";
+import { createMetricsRollupWorker } from "./application/metrics-rollup.js";
 import { loadWorkerConfig } from "./config.js";
 import { createPostgresAggregationJobStore } from "./infrastructure/postgres/aggregation-job-store.js";
 import { createPostgresContentRetentionRepository } from "./infrastructure/postgres/content-retention-repository.js";
+import { createPostgresMetricsRollupStore } from "./infrastructure/postgres/metrics-rollup-store.js";
 import { createMinioContentDeleter } from "./infrastructure/minio/content-deleter.js";
 
 const config = loadWorkerConfig();
@@ -21,6 +23,9 @@ const contentRetention = createContentRetentionWorker(
   createPostgresContentRetentionRepository(pool),
   createMinioContentDeleter(config.content),
 );
+const metricsRollup = createMetricsRollupWorker(
+  createPostgresMetricsRollupStore(pool),
+);
 let stopping = false;
 let nextContentCleanupAt = 0;
 
@@ -29,7 +34,8 @@ async function run(): Promise<void> {
   while (!stopping) {
     try {
       const processed = await worker.processNextJob();
-      if (!processed) {
+      const metricsProcessed = await metricsRollup.processNextJob();
+      if (!processed && !metricsProcessed) {
         if (Date.now() >= nextContentCleanupAt) {
           const result = await contentRetention.runOnce();
           nextContentCleanupAt =

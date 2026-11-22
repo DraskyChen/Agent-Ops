@@ -68,6 +68,11 @@ Trace UI code lives under `features/traces`. API adapters convert the shared con
 
 `packages/contracts` contains both generated telemetry identifiers and the stable HTTP API DTOs. New cross-process fields are added to contracts first, then mapped by server adapters and web feature adapters. Duplicate DTO definitions outside contracts fail the architecture check.
 
+`packages/metrics` contains the shared pure metric definitions consumed by both
+the Server query service and the Worker rollup builder. It owns status
+denominators, software latency histograms, percentile estimation, and time
+bucketing so those rules cannot diverge between processes.
+
 ## Enforcement
 
 ```bash

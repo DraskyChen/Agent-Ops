@@ -80,19 +80,19 @@ export function OperationsPage() {
               icon={<Database size={16} />}
               label="Accepted spans"
               value={health.batches.acceptedSpans.toLocaleString()}
-              detail={`${health.batches.rejectedSpans.toLocaleString()} rejected`}
+              detail={`last ${health.windowHours}h · ${health.batches.rejectedSpans.toLocaleString()} rejected`}
             />
             <Metric
               icon={<Clock3 size={16} />}
               label="Aggregation backlog"
               value={health.aggregation.pending.toLocaleString()}
-              detail={`${health.aggregation.failed} failed jobs`}
+              detail={`global queue · ${health.aggregation.failed} failed`}
             />
             <Metric
               icon={<HardDrive size={16} />}
               label="Available content"
               value={health.content.available.toLocaleString()}
-              detail={`${health.content.expired} expired`}
+              detail={`global objects · ${health.content.expired} expired`}
             />
           </section>
 
@@ -101,7 +101,7 @@ export function OperationsPage() {
               <div className="panel-heading">
                 <div>
                   <strong>Batch outcomes</strong>
-                  <small>Machine ingest window</small>
+                  <small>Last {health.windowHours} hours</small>
                 </div>
               </div>
               <StatusLine
@@ -125,7 +125,7 @@ export function OperationsPage() {
               <div className="panel-heading">
                 <div>
                   <strong>Rejected spans</strong>
-                  <small>Top reasons in the selected window</small>
+                  <small>Top reasons in the last {health.windowHours} hours</small>
                 </div>
               </div>
               {health.rejectsByReason.length === 0 ? (
@@ -146,7 +146,7 @@ export function OperationsPage() {
               <div className="panel-heading">
                 <div>
                   <strong>Aggregation</strong>
-                  <small>Trace projection worker</small>
+                  <small>Global current worker state</small>
                 </div>
               </div>
               <StatusLine
@@ -178,7 +178,7 @@ export function OperationsPage() {
               <div className="panel-heading">
                 <div>
                   <strong>Content lifecycle</strong>
-                  <small>S3-compatible object metadata</small>
+                  <small>Global object metadata state</small>
                 </div>
               </div>
               <StatusLine

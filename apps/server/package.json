@@ -15,6 +15,7 @@
   },
   "dependencies": {
     "@agent-ops/contracts": "workspace:*",
+    "@agent-ops/metrics": "workspace:*",
     "@fastify/cookie": "11.1.5",
     "fastify": "5.12.8",
     "minio": "8.0.7",

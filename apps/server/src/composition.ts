@@ -4,6 +4,7 @@ import type { ServerDependencies } from "./application/dependencies.js";
 import { createContentService } from "./application/content.js";
 import { createFeedbackService } from "./application/feedback.js";
 import { createOtlpIngestService } from "./application/ingest.js";
+import { createMetricsService } from "./application/metrics.js";
 import { createOperationsService } from "./application/operations.js";
 import { createReviewService } from "./application/reviews.js";
 import { createTraceQueryService } from "./application/traces.js";
@@ -15,6 +16,7 @@ import { createPostgresHumanAuthRepository } from "./infrastructure/postgres/aut
 import { createPostgresTraceBatchWriter } from "./infrastructure/postgres/ingest-writer.js";
 import { createPostgresContentRepository } from "./infrastructure/postgres/content-repository.js";
 import { createPostgresFeedbackRepository } from "./infrastructure/postgres/feedback-repository.js";
+import { createPostgresMetricsRepository } from "./infrastructure/postgres/metrics-repository.js";
 import { createPostgresOperationsRepository } from "./infrastructure/postgres/operations-repository.js";
 import { createPostgresReviewRepository } from "./infrastructure/postgres/review-repository.js";
 import { createPostgresTraceReadRepository } from "./infrastructure/postgres/trace-repository.js";
@@ -73,6 +75,9 @@ export async function createServerDependencies(
     ),
     feedback: createFeedbackService(
       createPostgresFeedbackRepository(options.pool),
+    ),
+    metrics: createMetricsService(
+      createPostgresMetricsRepository(options.pool),
     ),
     reviews: createReviewService(createPostgresReviewRepository(options.pool)),
     operations: createOperationsService(

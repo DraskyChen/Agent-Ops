@@ -141,6 +141,9 @@ apps/worker/src/
 - 遥测契约：由 YAML 生成的属性、枚举和任务类型。
 - API 契约：Trace 查询、Trace 详情、健康检查和错误响应。
 
+`packages/metrics` 保存 Server 指标查询与 Worker 汇总共同使用的纯函数，
+包括状态分母、固定延迟直方图、百分位估算和时间分桶，避免两个进程各维护一套口径。
+
 新增跨进程字段时，顺序必须是：
 
 1. 修改 `packages/contracts`。

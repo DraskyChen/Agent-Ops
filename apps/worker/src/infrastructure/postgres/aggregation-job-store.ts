@@ -97,6 +97,10 @@ function createTransaction(client: PoolClient): AggregationTransaction {
     },
 
     async saveTrace(trace) {
+      const previous = await client.query<{ start_time: Date | null }>(
+        "select start_time from traces where trace_id = $1",
+        [trace.traceId],
+      );
       await client.query(
         `insert into traces (
           trace_id, session_id, root_span_id, app_name, run_name, service_name,
@@ -144,6 +148,26 @@ function createTransaction(client: PoolClient): AggregationTransaction {
           aggregation_revision = traces.aggregation_revision + 1`,
         traceValues(trace),
       );
+      const affectedBuckets = new Set<number>();
+      const previousStart = previous.rows[0]?.start_time;
+      if (previousStart !== null && previousStart !== undefined) {
+        affectedBuckets.add(startOfHour(previousStart).getTime());
+      }
+      affectedBuckets.add(startOfHour(trace.startTime).getTime());
+      for (const bucket of affectedBuckets) {
+        await client.query(
+          `insert into trace_metric_rollup_jobs (
+            bucket_start, state, requested_at
+          ) values ($1, 'pending', now())
+          on conflict (bucket_start) do update set
+            state = 'pending',
+            requested_at = now(),
+            completed_at = null,
+            attempt_count = 0,
+            last_error = null`,
+          [new Date(bucket)],
+        );
+      }
     },
 
     async schedule(traceId, notBefore) {
@@ -169,6 +193,12 @@ function createTransaction(client: PoolClient): AggregationTransaction {
       );
     },
   };
+}
+
+function startOfHour(value: Date): Date {
+  const bucket = new Date(value);
+  bucket.setUTCMinutes(0, 0, 0);
+  return bucket;
 }
 
 interface PriceRow {

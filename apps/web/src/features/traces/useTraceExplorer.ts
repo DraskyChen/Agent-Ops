@@ -16,8 +16,10 @@ import {
   type TraceView,
 } from "./model.js";
 
-export function useTraceExplorer() {
-  const [filters, setFilters] = useState<TraceFilters>(DEFAULT_FILTERS);
+export function useTraceExplorer(
+  initialFilters: TraceFilters = DEFAULT_FILTERS,
+) {
+  const [filters, setFilters] = useState<TraceFilters>(initialFilters);
   const [me, setMe] = useState<MeResponse | null>(null);
   const [authLoading, setAuthLoading] = useState(true);
   const [selectedTraceId, setSelectedTraceId] = useState<string | null>(null);
@@ -59,9 +61,11 @@ export function useTraceExplorer() {
 
   const loadFirstPage = useCallback(async (activeFilters: TraceFilters) => {
     const generation = ++requestGeneration.current;
-    const startedAfter = new Date(
-      Date.now() - rangeMilliseconds(activeFilters.timeRange),
-    ).toISOString();
+    const startedAfter =
+      activeFilters.startedAfter ??
+      new Date(
+        Date.now() - rangeMilliseconds(activeFilters.timeRange),
+      ).toISOString();
     windowStartedAfter.current = startedAfter;
     setLoading(true);
     try {
@@ -179,6 +183,9 @@ export function useTraceExplorer() {
 
   return {
     filters,
+    replaceFilters(filters: TraceFilters) {
+      setFilters(filters);
+    },
     setFilter<Key extends keyof TraceFilters>(
       key: Key,
       value: TraceFilters[Key],

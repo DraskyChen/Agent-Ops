@@ -2,6 +2,7 @@ import type { OtlpIngestService } from "./ingest.js";
 import type { HumanAuth } from "./auth.js";
 import type { ContentService } from "./content.js";
 import type { FeedbackService } from "./feedback.js";
+import type { MetricsService } from "./metrics.js";
 import type { OperationsService } from "./operations.js";
 import type { ReviewService } from "./reviews.js";
 import type { TraceQueryService } from "./traces.js";
@@ -22,6 +23,7 @@ export interface ServerDependencies {
   ingest: OtlpIngestService;
   content: ContentService;
   feedback: FeedbackService;
+  metrics: MetricsService;
   reviews: ReviewService;
   operations: OperationsService;
   authorizeIngest: IngestRequestAuthorizer;
