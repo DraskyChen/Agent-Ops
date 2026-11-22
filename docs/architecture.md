@@ -618,8 +618,10 @@ price_versions
   notes                  text nullable
 ```
 
-Dataset and evaluation tables are deferred until the trace vertical slice is
-working.
+The foundation dataset tables now exist. Dataset revisions are immutable, and
+items snapshot input, baseline output, and expected output content independently
+from trace retention. Evaluation run, evaluator, and score-execution tables will
+be added with the rule and LLM-judge workers.
 
 `price_versions` is insert-only. For each LLM span, the worker selects the
 version matching provider, model, currency, pricing tier, and span start time,

@@ -8,6 +8,7 @@ import type { ServerDependencies } from "./application/dependencies.js";
 import { registerAuthRoutes } from "./http/routes/auth.js";
 import { registerHealthRoute } from "./http/routes/health.js";
 import { registerContentRoutes } from "./http/routes/content.js";
+import { registerDatasetRoutes } from "./http/routes/datasets.js";
 import { registerFeedbackRoute } from "./http/routes/feedback.js";
 import { registerOtlpIngestRoute } from "./http/routes/ingest.js";
 import { registerMetricsRoutes } from "./http/routes/metrics.js";
@@ -43,6 +44,11 @@ export function buildApp(options: BuildAppOptions): FastifyInstance {
     app,
     options.dependencies.content,
     options.dependencies.authorizeIngest,
+    options.dependencies.humanAuth,
+  );
+  registerDatasetRoutes(
+    app,
+    options.dependencies.datasets,
     options.dependencies.humanAuth,
   );
   registerFeedbackRoute(

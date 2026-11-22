@@ -15,6 +15,7 @@ describe("Agent Ops contracts", () => {
     expect(SCHEMA_VERSION).toBe("0.1");
     expect(ATTR.agentSpanType).toBe("agent.span.type");
     expect(ATTR.genAiRequestModel).toBe("gen_ai.request.model");
+    expect(ATTR.agentEvalCaseId).toBe("agent.eval.case_id");
     expect(ENUMS.spanType).toContain("agent.run");
     expect(ENUMS.contentStatus).toContain("expired");
     expect(TASK_TYPES).toContain("refund");

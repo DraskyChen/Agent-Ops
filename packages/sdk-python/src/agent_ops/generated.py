@@ -108,6 +108,7 @@ class Attr:
     AGENT_CONTENT_RECORDED = "agent.content.recorded"
     AGENT_COST_CURRENCY = "agent.cost.currency"
     AGENT_ERROR_CATEGORY = "agent.error.category"
+    AGENT_EVAL_CASE_ID = "agent.eval.case_id"
     AGENT_INPUT_REF = "agent.input.ref"
     AGENT_INPUT_SUMMARY = "agent.input.summary"
     AGENT_LLM_COST = "agent.llm.cost"

@@ -2,6 +2,7 @@ import type { Pool } from "pg";
 
 import type { ServerDependencies } from "./application/dependencies.js";
 import { createContentService } from "./application/content.js";
+import { createDatasetService } from "./application/datasets.js";
 import { createFeedbackService } from "./application/feedback.js";
 import { createOtlpIngestService } from "./application/ingest.js";
 import { createMetricsService } from "./application/metrics.js";
@@ -15,6 +16,7 @@ import { createOidcHumanAuth } from "./infrastructure/auth/oidc-auth.js";
 import { createPostgresHumanAuthRepository } from "./infrastructure/postgres/auth-repository.js";
 import { createPostgresTraceBatchWriter } from "./infrastructure/postgres/ingest-writer.js";
 import { createPostgresContentRepository } from "./infrastructure/postgres/content-repository.js";
+import { createPostgresDatasetRepository } from "./infrastructure/postgres/dataset-repository.js";
 import { createPostgresFeedbackRepository } from "./infrastructure/postgres/feedback-repository.js";
 import { createPostgresMetricsRepository } from "./infrastructure/postgres/metrics-repository.js";
 import { createPostgresOperationsRepository } from "./infrastructure/postgres/operations-repository.js";
@@ -34,6 +36,7 @@ export interface CompositionOptions {
   content: MinioContentStoreConfig & {
     maxBytes: number;
     retentionDays: number;
+    datasetRetentionDays: number;
   };
 }
 
@@ -50,6 +53,14 @@ export async function createServerDependencies(
             sessionTtlHours: options.auth.sessionTtlHours,
           },
         );
+  const content = createContentService(
+    createMinioContentStore(options.content),
+    createPostgresContentRepository(options.pool),
+    {
+      maxBytes: options.content.maxBytes,
+      retentionDays: options.content.retentionDays,
+    },
+  );
 
   return {
     healthCheck: async () => {
@@ -65,12 +76,12 @@ export async function createServerDependencies(
         maxLatenessHours: options.traceMaxLatenessHours,
       }),
     ),
-    content: createContentService(
-      createMinioContentStore(options.content),
-      createPostgresContentRepository(options.pool),
+    content,
+    datasets: createDatasetService(
+      createPostgresDatasetRepository(options.pool),
+      content,
       {
-        maxBytes: options.content.maxBytes,
-        retentionDays: options.content.retentionDays,
+        contentRetentionDays: options.content.datasetRetentionDays,
       },
     ),
     feedback: createFeedbackService(

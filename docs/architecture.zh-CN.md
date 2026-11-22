@@ -557,7 +557,9 @@ price_versions
   notes                  text nullable
 ```
 
-数据集和评测表在 Trace 纵向链路跑通后再设计。
+数据集基础表已随评测阶段引入。数据集修订不可变，条目保存独立的输入、
+基线和期望内容快照；评测运行、评测器和评分执行表在规则/LLM Judge
+Worker 实现时继续补充。
 
 `price_versions` 只追加、不原地修改。对每个 LLM Span，Worker 按提供方、模型、币种、价格档位和 Span 开始时间选择价目版本，将计算出的 `cost_micros` 和 `price_version_id` 写入 Span，再汇总到 Trace 投影。DeepSeek 高峰/低峰规则见 [pricing.md](pricing.md)。
 

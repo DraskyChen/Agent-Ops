@@ -1,6 +1,7 @@
 import { randomUUID } from "node:crypto";
 
 import { metricBucketStart } from "@agent-ops/metrics";
+import type { DatasetRevisionDetail } from "@agent-ops/contracts";
 import type { FastifyInstance } from "fastify";
 import type { Pool } from "pg";
 import {
@@ -14,13 +15,19 @@ import {
 import { buildApp } from "../src/app.js";
 import { createServerDependencies } from "../src/composition.js";
 import { createPool } from "../src/db/pool.js";
+import { createMinioContentStore } from "../src/infrastructure/minio/content-store.js";
 import { createPostgresMetricsRollupStore } from "../../worker/src/infrastructure/postgres/metrics-rollup-store.js";
 
 const enabled = process.env.AGENT_OPS_INTEGRATION === "1";
 
 describe.skipIf(!enabled)("operational review integration", () => {
   const traceId = `trace-integration-${randomUUID()}`;
+  const datasetTraceId = `trace-dataset-${randomUUID()}`;
   const contentId = randomUUID();
+  const datasetContentIds: string[] = [];
+  let datasetInputContentId: string | undefined;
+  let datasetOutputContentId: string | undefined;
+  let datasetId: string | undefined;
   let metricBucket: Date;
   let app: FastifyInstance;
   let pool: Pool;
@@ -83,9 +90,62 @@ describe.skipIf(!enabled)("operational review integration", () => {
         secretKey: "agent_ops_dev_secret",
         maxBytes: 2 * 1024 * 1024,
         retentionDays: 30,
+        datasetRetentionDays: 180,
       },
     });
     app = buildApp({ dependencies });
+
+    for (const [contentKind, content] of [
+      ["agent_input", "integration prompt"],
+      ["agent_output", "integration answer"],
+    ] as const) {
+      const uploaded = await app.inject({
+        method: "POST",
+        url: "/api/v1/content",
+        headers: { authorization: "Bearer integration-secret" },
+        payload: {
+          ownerApp: "integration-app",
+          contentKind,
+          mediaType: "text/plain",
+          captureMode: "full",
+          redactionRuleVersion: "v1",
+          content,
+        },
+      });
+      expect(uploaded.statusCode).toBe(201);
+      datasetContentIds.push(
+        (uploaded.json() as { contentId: string }).contentId,
+      );
+    }
+    [datasetInputContentId, datasetOutputContentId] = datasetContentIds;
+    await pool.query(
+      `insert into traces (
+        trace_id, root_span_id, app_name, run_name, service_name,
+        service_version, environment, task_type, prompt_version, eval_case_id,
+        model, run_status, first_span_at, last_span_at, start_time, end_time,
+        duration_ms, step_count, tool_error_count, input_tokens, output_tokens,
+        cost_micros, currency, completeness, ingest_state, sealed_at
+      ) values (
+        $1, 'dataset-root', 'integration-app', 'dataset baseline', 'worker',
+        '1.2.3', 'test', 'refund', 'prompt-v1', 'refund-case-integration',
+        'deepseek-flash', 'success', now(), now(), now(), now(), 100, 0, 0,
+        10, 5, 100, 'USD', 'complete', 'sealed_complete', now()
+      )`,
+      [datasetTraceId],
+    );
+    await pool.query(
+      `insert into spans (
+        trace_id, span_id, service_name, service_version, environment,
+        span_type, name, start_time, end_time, duration_ms, status,
+        resource_attributes, attributes, input_content_ref,
+        output_content_ref, content_recorded, schema_version
+      ) values (
+        $1, 'dataset-root', 'worker', '1.2.3', 'test', 'agent.run',
+        'refund-agent', now(), now(), 100, 'OK', '{}'::jsonb, '{}'::jsonb,
+        $2, $3, 'full', '0.1'
+      )`,
+      [datasetTraceId, datasetInputContentId, datasetOutputContentId],
+    );
   });
 
   afterAll(async () => {
@@ -93,12 +153,54 @@ describe.skipIf(!enabled)("operational review integration", () => {
     if (pool !== undefined) {
       await pool.query("delete from feedback where trace_id = $1", [traceId]);
       await pool.query("delete from traces where trace_id = $1", [traceId]);
+      if (datasetId !== undefined) {
+        const copied = await pool.query<{ object_key: string }>(
+          "select object_key from content_objects where owner_app = $1",
+          ["agent-ops-datasets"],
+        );
+        await pool.query("delete from datasets where id = $1", [datasetId]);
+        await pool.query(
+          "delete from content_objects where owner_app = $1",
+          ["agent-ops-datasets"],
+        );
+        const blobs = createMinioContentStore({
+          endpoint: "http://127.0.0.1:9000",
+          region: "us-east-1",
+          bucket: "agent-ops-content",
+          accessKey: "agent_ops",
+          secretKey: "agent_ops_dev_secret",
+        });
+        for (const row of copied.rows) {
+          await blobs.delete(row.object_key).catch(() => undefined);
+        }
+      }
+      const sourceContent = await pool.query<{ object_key: string }>(
+        "select object_key from content_objects where content_id = any($1::uuid[])",
+        [datasetContentIds],
+      );
+      await pool.query("delete from traces where trace_id = $1", [
+        datasetTraceId,
+      ]);
       await pool.query("delete from content_access_log where content_id = $1", [
         contentId,
       ]);
       await pool.query("delete from content_objects where content_id = $1", [
         contentId,
       ]);
+      await pool.query(
+        "delete from content_objects where content_id = any($1::uuid[])",
+        [datasetContentIds],
+      );
+      const blobs = createMinioContentStore({
+        endpoint: "http://127.0.0.1:9000",
+        region: "us-east-1",
+        bucket: "agent-ops-content",
+        accessKey: "agent_ops",
+        secretKey: "agent_ops_dev_secret",
+      });
+      for (const row of sourceContent.rows) {
+        await blobs.delete(row.object_key).catch(() => undefined);
+      }
       await pool.query(
         `delete from trace_metrics_hourly
          where bucket_start = $1 and app_name = 'integration-app'`,
@@ -230,5 +332,72 @@ describe.skipIf(!enabled)("operational review integration", () => {
       [contentId],
     );
     expect(audit.rows[0]).toEqual({ decision: "expired" });
+
+    const createdDataset = await app.inject({
+      method: "POST",
+      url: "/api/v1/datasets",
+      payload: {
+        name: `integration-dataset-${randomUUID()}`,
+        description: "integration snapshot",
+      },
+    });
+    expect(createdDataset.statusCode).toBe(201);
+    datasetId = (createdDataset.json() as { datasetId: string }).datasetId;
+
+    const revision = await app.inject({
+      method: "POST",
+      url: `/api/v1/datasets/${datasetId}/revisions`,
+      payload: {
+        note: "baseline",
+        items: [
+          {
+            traceId: datasetTraceId,
+            expectedOutput: "Refund completed",
+            expectedBehavior: "Only promise a refund after tool success",
+            tags: ["refund", "integration"],
+          },
+        ],
+      },
+    });
+    expect(revision.statusCode).toBe(201);
+    const revisionBody = revision.json() as DatasetRevisionDetail;
+    expect(revisionBody).toMatchObject({
+      revision: 1,
+      itemCount: 1,
+      items: [
+        {
+          caseId: "refund-case-integration",
+          sourceTraceId: datasetTraceId,
+          expectedBehavior: "Only promise a refund after tool success",
+        },
+      ],
+    });
+    const item = revisionBody.items[0];
+    expect(item).toBeDefined();
+    if (item !== undefined) {
+      expect(item.inputContentRef).not.toBe(datasetInputContentId);
+      expect(item.baselineOutputContentRef).not.toBe(
+        datasetOutputContentId,
+      );
+      expect(item.expectedOutputContentRef).not.toBeNull();
+      datasetContentIds.push(
+        item.inputContentRef,
+        item.baselineOutputContentRef,
+        ...(item.expectedOutputContentRef === null
+          ? []
+          : [item.expectedOutputContentRef]),
+      );
+    }
+
+    const dataset = await app.inject({
+      method: "GET",
+      url: `/api/v1/datasets/${datasetId}`,
+    });
+    expect(dataset.statusCode).toBe(200);
+    expect(dataset.json()).toMatchObject({
+      latestRevision: 1,
+      itemCount: 1,
+      revisions: [{ revision: 1, itemCount: 1 }],
+    });
   });
 });

@@ -11,6 +11,14 @@ import {
 export * from "./generated.js";
 export type {
   ApiErrorResponse,
+  DatasetCreateRequest,
+  DatasetDetail,
+  DatasetItem,
+  DatasetItemDraft,
+  DatasetRevisionCreateRequest,
+  DatasetRevisionDetail,
+  DatasetRevisionSummary,
+  DatasetSummary,
   FeedbackItem,
   FeedbackWriteRequest,
   FeedbackWriteResponse,

@@ -38,6 +38,7 @@ describe("Agent Ops TypeScript SDK", () => {
       {
         sessionId: "session-1",
         taskType: "refund",
+        evalCaseId: "refund-case-001",
         inputSummary: "user=alice@example.com phone=13800138000",
       },
       async (run) => {
@@ -76,6 +77,7 @@ describe("Agent Ops TypeScript SDK", () => {
     expect(root.attributes[ATTR.agentSpanType]).toBe("agent.run");
     expect(root.attributes[ATTR.agentRunStatus]).toBe("success");
     expect(root.attributes[ATTR.agentRunStopReason]).toBe("final_answer");
+    expect(root.attributes[ATTR.agentEvalCaseId]).toBe("refund-case-001");
     expect(root.attributes[ATTR.agentInputSummary]).toBe(
       "user=[REDACTED_EMAIL] phone=[REDACTED_PHONE]",
     );

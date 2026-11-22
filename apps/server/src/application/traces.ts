@@ -20,6 +20,7 @@ export interface NormalizedTraceListQuery {
   taskType?: string;
   model?: string;
   promptVersion?: string;
+  evalCaseId?: string;
   serviceVersion?: string;
   hasErrors?: "true" | "false";
   reviewStatus?: ReviewState;
@@ -110,6 +111,7 @@ export function normalizeTraceListQuery(
     ...optionalEntry("taskType", optionalFilter(query.taskType)),
     ...optionalEntry("model", optionalText(query.model)),
     ...optionalEntry("promptVersion", optionalText(query.promptVersion)),
+    ...optionalEntry("evalCaseId", optionalText(query.evalCaseId)),
     ...optionalEntry("serviceVersion", optionalText(query.serviceVersion)),
     ...optionalEntry(
       "hasErrors",

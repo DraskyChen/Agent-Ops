@@ -28,6 +28,7 @@ export interface TraceListQuery {
   taskType?: string;
   model?: string;
   promptVersion?: string;
+  evalCaseId?: string;
   serviceVersion?: string;
   hasErrors?: "true" | "false";
   reviewStatus?: string;
@@ -44,6 +45,7 @@ export interface TraceListItem {
   taskType: string | null;
   model: string | null;
   promptVersion: string | null;
+  evalCaseId: string | null;
   environment: Environment | null;
   runStatus: RunStatus | null;
   latencyMs: number | null;
@@ -251,6 +253,71 @@ export interface MetricsBreakdownResponse {
   scope: MetricsScope;
   dimension: MetricsDimension;
   items: MetricsBreakdownRow[];
+}
+
+export interface DatasetSummary {
+  datasetId: string;
+  name: string;
+  description: string | null;
+  latestRevision: number | null;
+  itemCount: number;
+  createdBy: string;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface DatasetRevisionSummary {
+  revisionId: string;
+  datasetId: string;
+  revision: number;
+  itemCount: number;
+  note: string | null;
+  createdBy: string;
+  createdAt: string;
+}
+
+export interface DatasetItem {
+  itemId: string;
+  caseId: string;
+  sourceTraceId: string;
+  appName: string | null;
+  promptVersion: string | null;
+  taskType: string | null;
+  model: string | null;
+  environment: Environment | null;
+  runStatus: RunStatus | null;
+  sourceStartedAt: string | null;
+  inputContentRef: string;
+  baselineOutputContentRef: string;
+  expectedOutputContentRef: string | null;
+  expectedBehavior: string | null;
+  tags: string[];
+}
+
+export interface DatasetDetail extends DatasetSummary {
+  revisions: DatasetRevisionSummary[];
+}
+
+export interface DatasetRevisionDetail extends DatasetRevisionSummary {
+  items: DatasetItem[];
+}
+
+export interface DatasetCreateRequest {
+  name: string;
+  description?: string;
+}
+
+export interface DatasetItemDraft {
+  traceId: string;
+  caseId?: string;
+  expectedOutput?: string;
+  expectedBehavior?: string;
+  tags?: string[];
+}
+
+export interface DatasetRevisionCreateRequest {
+  note?: string;
+  items: DatasetItemDraft[];
 }
 
 export interface HealthResponse {

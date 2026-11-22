@@ -47,11 +47,16 @@ Implemented:
   application/model/task/version distributions.
 - Dashboard-to-trace drill-down with bucket-aligned time ranges and structured filters.
 - Live trace list, detail, review, and content console backed by the query API.
+- Optional `agent.eval.case_id` in the TypeScript and Python SDKs for strict
+  cross-version pairing.
+- Immutable dataset revisions created from sealed traces, with copied input,
+  baseline output, and expected output content.
 - Independent PostgreSQL and MinIO development stack.
 
 Not implemented yet:
 
-- Datasets, automated scoring, rule evaluation, and LLM-judge workflows.
+- Dataset and Evaluation web workflows.
+- Evaluation runs, rule evaluators, and LLM judge execution.
 
 ## Local development
 
