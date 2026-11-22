@@ -29,6 +29,7 @@ export interface ServerConfig {
   database: PoolConfig;
   ingestToken?: string;
   traceMaxLatenessHours: number;
+  evaluationJudgeEnabled: boolean;
   auth:
     | {
         mode: "dev";
@@ -119,6 +120,8 @@ export function loadServerConfig(
       ? {}
       : { ingestToken: environment.AGENT_OPS_INGEST_TOKEN }),
     traceMaxLatenessHours,
+    evaluationJudgeEnabled:
+      environment.EVALUATION_JUDGE_ENABLED === "true",
     auth:
       authMode === "dev"
         ? {

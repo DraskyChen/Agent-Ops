@@ -17,7 +17,7 @@ import type {
   EvaluationDetail,
   EvaluationStatus,
   EvaluationSummary,
-  RuleEvaluatorDefinition,
+  EvaluatorDefinition,
 } from "@agent-ops/contracts";
 
 import { fetchDataset, fetchDatasets } from "../datasets/api.js";
@@ -30,7 +30,7 @@ import {
 } from "./api.js";
 
 const EVALUATOR_OPTIONS: Array<{
-  value: RuleEvaluatorDefinition["kind"];
+  value: EvaluatorDefinition["kind"];
   label: string;
 }> = [
   { value: "exact", label: "Exact output" },
@@ -40,12 +40,15 @@ const EVALUATOR_OPTIONS: Array<{
   { value: "max_latency_ms", label: "Maximum latency" },
   { value: "max_cost_micros", label: "Maximum cost" },
   { value: "max_tool_errors", label: "Maximum tool errors" },
+  { value: "llm_judge", label: "DeepSeek LLM Judge" },
 ];
 
 export function EvaluationsPage({
   canManage,
+  canJudge,
 }: {
   canManage: boolean;
+  canJudge: boolean;
 }) {
   const [evaluations, setEvaluations] = useState<EvaluationSummary[]>([]);
   const [datasets, setDatasets] = useState<DatasetSummary[]>([]);
@@ -59,7 +62,12 @@ export function EvaluationsPage({
   const [evaluatorName, setEvaluatorName] = useState("output-rule");
   const [evaluatorVersion, setEvaluatorVersion] = useState("1");
   const [evaluatorKind, setEvaluatorKind] =
-    useState<RuleEvaluatorDefinition["kind"]>("exact");
+    useState<EvaluatorDefinition["kind"]>("exact");
+  const [judgeModel, setJudgeModel] = useState("deepseek-flash");
+  const [judgeRubric, setJudgeRubric] = useState(
+    "Pass only when the candidate output fully satisfies the user request and is grounded in the available evidence.",
+  );
+  const [allowExternalContent, setAllowExternalContent] = useState(false);
   const [configValue, setConfigValue] = useState("");
   const [appName, setAppName] = useState("");
   const [promptVersion, setPromptVersion] = useState("");
@@ -166,6 +174,9 @@ export function EvaluationsPage({
         version: evaluatorVersion,
         kind: evaluatorKind,
         configValue,
+        judgeModel,
+        judgeRubric,
+        allowExternalContent,
       });
       const hours = Number(timeRange);
       const now = new Date();
@@ -351,18 +362,60 @@ export function EvaluationsPage({
                     value={evaluatorKind}
                     onChange={(event) =>
                       setEvaluatorKind(
-                        event.target.value as RuleEvaluatorDefinition["kind"],
+                        event.target.value as EvaluatorDefinition["kind"],
                       )
                     }
                   >
                     {EVALUATOR_OPTIONS.map((option) => (
-                      <option key={option.value} value={option.value}>
-                        {option.label}
+                      <option
+                        key={option.value}
+                        value={option.value}
+                        disabled={
+                          option.value === "llm_judge" && !canJudge
+                        }
+                      >
+                        {option.value === "llm_judge" && !canJudge
+                          ? "LLM Judge (admin only)"
+                          : option.label}
                       </option>
                     ))}
                   </select>
                 </Field>
               </div>
+              {evaluatorKind === "llm_judge" ? (
+                <>
+                  <Field label="Judge model">
+                    <input
+                      value={judgeModel}
+                      onChange={(event) => setJudgeModel(event.target.value)}
+                      required
+                    />
+                  </Field>
+                  <Field label="Rubric">
+                    <textarea
+                      value={judgeRubric}
+                      onChange={(event) => setJudgeRubric(event.target.value)}
+                      minLength={20}
+                      maxLength={8000}
+                      rows={4}
+                      required
+                    />
+                  </Field>
+                  <label className="judge-consent">
+                    <input
+                      type="checkbox"
+                      checked={allowExternalContent}
+                      onChange={(event) =>
+                        setAllowExternalContent(event.target.checked)
+                      }
+                    />
+                    <span>
+                      Send this dataset input and candidate output to DeepSeek
+                      for judging.
+                    </span>
+                  </label>
+                </>
+              ) : null}
               {evaluatorKind === "contains" ||
               evaluatorKind === "regex" ||
               evaluatorKind === "max_latency_ms" ||
@@ -427,7 +480,12 @@ export function EvaluationsPage({
               <button
                 className="button primary compact"
                 type="submit"
-                disabled={submitting || revisionId === ""}
+                disabled={
+                  submitting ||
+                  revisionId === "" ||
+                  (evaluatorKind === "llm_judge" &&
+                    (!allowExternalContent || judgeRubric.trim().length < 20))
+                }
               >
                 <Play size={14} />
                 Start evaluation
@@ -521,6 +579,9 @@ export function EvaluationsPage({
                         <small>
                           {evaluationCase.candidateTraceId ??
                             "No matching candidate trace"}
+                          {evaluationCase.judgeCall === null
+                            ? ""
+                            : ` · ${evaluationCase.judgeCall.model} · ${evaluationCase.judgeCall.status}`}
                         </small>
                       </div>
                       <StatusBadge status={evaluationCase.status} />
@@ -551,12 +612,18 @@ function evaluatorFromForm({
   version,
   kind,
   configValue,
+  judgeModel,
+  judgeRubric,
+  allowExternalContent,
 }: {
   name: string;
   version: string;
-  kind: RuleEvaluatorDefinition["kind"];
+  kind: EvaluatorDefinition["kind"];
   configValue: string;
-}): RuleEvaluatorDefinition {
+  judgeModel: string;
+  judgeRubric: string;
+  allowExternalContent: boolean;
+}): EvaluatorDefinition {
   const base = {
     name: name.trim(),
     version: Number(version),
@@ -574,6 +641,20 @@ function evaluatorFromForm({
     case "max_cost_micros":
     case "max_tool_errors":
       return { ...base, kind, config: { value: Number(configValue) } };
+    case "llm_judge":
+      if (!allowExternalContent) {
+        throw new Error("External Judge consent is required");
+      }
+      return {
+        ...base,
+        kind,
+        config: {
+          model: judgeModel.trim(),
+          rubric: judgeRubric.trim(),
+          allowExternalContent: true,
+          temperature: 0,
+        },
+      };
   }
 }
 

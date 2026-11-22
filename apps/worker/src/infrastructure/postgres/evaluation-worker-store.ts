@@ -1,17 +1,23 @@
-import type { RuleEvaluatorDefinition } from "@agent-ops/contracts";
+import { createHash, randomUUID } from "node:crypto";
+
+import type { EvaluatorDefinition } from "@agent-ops/contracts";
 import type { Pool } from "pg";
 
 import type {
   EvaluationWork,
   EvaluationWorkCase,
   EvaluationWorkerStore,
+  JudgeCallWrite,
   RuleResultWrite,
 } from "../../application/evaluate-rule-run.js";
 import type { ObjectTextReader } from "../minio/object-reader.js";
+import type { ObjectTextWriter } from "../minio/object-writer.js";
 
 export function createPostgresEvaluationWorkerStore(
   pool: Pool,
   reader: ObjectTextReader,
+  writer: ObjectTextWriter,
+  judgeContentRetentionDays = 180,
 ): EvaluationWorkerStore {
   return {
     async claimNextRun() {
@@ -171,6 +177,61 @@ export function createPostgresEvaluationWorkerStore(
       }
     },
 
+    async saveJudgeCall(input) {
+      const promptBody = JSON.stringify(input.prompt);
+      const responseBody = input.response?.content ?? input.error ?? null;
+      const promptContent = await storeContent(
+        pool,
+        writer,
+        judgeContentRetentionDays,
+        "judge_prompt",
+        promptBody,
+      );
+      const responseContent =
+        responseBody === null
+          ? null
+          : await storeContent(
+              pool,
+              writer,
+              judgeContentRetentionDays,
+              "judge_response",
+              responseBody,
+            );
+      const status =
+        input.error === null ? "completed" : "failed";
+      await pool.query(
+        `insert into judge_calls (
+          evaluation_run_id, evaluation_case_id, evaluator_version_id,
+          provider, model, prompt_content_ref, response_content_ref, status,
+          input_tokens, output_tokens, error, completed_at
+        ) values (
+          $1, $2, $3, 'deepseek', $4, $5, $6, $7, $8, $9, $10, now()
+        )
+        on conflict (
+          evaluation_run_id, evaluation_case_id, evaluator_version_id
+        ) do update set
+          prompt_content_ref = excluded.prompt_content_ref,
+          response_content_ref = excluded.response_content_ref,
+          status = excluded.status,
+          input_tokens = excluded.input_tokens,
+          output_tokens = excluded.output_tokens,
+          error = excluded.error,
+          completed_at = excluded.completed_at`,
+        [
+          input.evaluationId,
+          input.evaluationCaseId,
+          input.evaluatorVersionId,
+          input.model,
+          promptContent,
+          responseContent,
+          status,
+          input.response?.inputTokens ?? null,
+          input.response?.outputTokens ?? null,
+          input.error,
+        ],
+      );
+    },
+
     async completeRun(evaluationId) {
       const client = await pool.connect();
       try {
@@ -292,7 +353,8 @@ async function loadWork(
   const cases = await pool.query<EvaluationWorkCaseRow>(
     `select
       c.id as evaluation_case_id, c.case_id, c.candidate_trace_id,
-      i.expected_output_content_ref, c.candidate_output_content_ref,
+      i.input_content_ref, i.expected_output_content_ref, i.expected_behavior,
+      c.candidate_output_content_ref,
       t.duration_ms, t.cost_micros, t.tool_error_count
     from evaluation_cases c
     join dataset_items i on i.id = c.dataset_item_id
@@ -311,7 +373,7 @@ async function loadWork(
       version: row.version,
       kind: row.kind,
       config: row.config,
-    } as RuleEvaluatorDefinition,
+    } as EvaluatorDefinition,
     cases: cases.rows.map(mapWorkCase),
   };
 }
@@ -340,8 +402,10 @@ interface EvaluationWorkCaseRow {
   evaluation_case_id: string;
   case_id: string;
   candidate_trace_id: string;
+  input_content_ref: string | null;
   expected_output_content_ref: string | null;
   candidate_output_content_ref: string | null;
+  expected_behavior: string | null;
   duration_ms: string | null;
   cost_micros: string | null;
   tool_error_count: number | null;
@@ -352,10 +416,57 @@ function mapWorkCase(row: EvaluationWorkCaseRow): EvaluationWorkCase {
     evaluationCaseId: row.evaluation_case_id,
     caseId: row.case_id,
     candidateTraceId: row.candidate_trace_id,
+    inputContentRef: row.input_content_ref,
     expectedOutputContentRef: row.expected_output_content_ref,
     candidateOutputContentRef: row.candidate_output_content_ref,
+    expectedBehavior: row.expected_behavior,
     latencyMs: row.duration_ms === null ? null : Number(row.duration_ms),
     costMicros: row.cost_micros === null ? null : Number(row.cost_micros),
     toolErrorCount: row.tool_error_count,
   };
+}
+
+async function storeContent(
+  pool: Pool,
+  writer: ObjectTextWriter,
+  retentionDays: number,
+  contentKind: string,
+  body: string,
+): Promise<string> {
+  const contentId = randomUUID();
+  const createdAt = new Date();
+  const objectKey = [
+    "evaluation",
+    "judge",
+    String(createdAt.getUTCFullYear()),
+    String(createdAt.getUTCMonth() + 1).padStart(2, "0"),
+    String(createdAt.getUTCDate()).padStart(2, "0"),
+    `${contentId}.json`,
+  ].join("/");
+  await writer.putText(objectKey, body, "application/json");
+  try {
+    await pool.query(
+      `insert into content_objects (
+        content_id, object_key, owner_app, content_kind, media_type,
+        capture_mode, size_bytes, sha256, redaction_rule_version,
+        encryption, status, expires_at
+      ) values (
+        $1, $2, 'agent-ops-evaluation', $3, 'application/json', 'full',
+        $4, $5, 'judge-v1', 'deployment-managed', 'available', $6
+      )`,
+      [
+        contentId,
+        objectKey,
+        contentKind,
+        Buffer.byteLength(body),
+        createHash("sha256").update(body).digest("hex"),
+        new Date(
+          createdAt.getTime() + retentionDays * 24 * 60 * 60 * 1000,
+        ),
+      ],
+    );
+  } catch (error) {
+    throw error;
+  }
+  return contentId;
 }

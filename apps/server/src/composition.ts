@@ -34,6 +34,7 @@ export interface CompositionOptions {
   pool: Pool;
   ingestToken?: string;
   traceMaxLatenessHours: number;
+  evaluationJudgeEnabled: boolean;
   auth: ServerConfig["auth"];
   content: MinioContentStoreConfig & {
     maxBytes: number;
@@ -88,6 +89,7 @@ export async function createServerDependencies(
     ),
     evaluations: createEvaluationService(
       createPostgresEvaluationRepository(options.pool),
+      { judgeEnabled: options.evaluationJudgeEnabled },
     ),
     feedback: createFeedbackService(
       createPostgresFeedbackRepository(options.pool),

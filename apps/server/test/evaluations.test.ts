@@ -2,6 +2,7 @@ import { describe, expect, it, vi } from "vitest";
 
 import type { HumanPrincipal } from "../src/application/auth.js";
 import {
+  EvaluationPermissionError,
   EvaluationValidationError,
   createEvaluationService,
   normalizeEvaluationCreate,
@@ -123,6 +124,43 @@ describe("evaluation service", () => {
       }),
     );
   });
+
+  it("requires an enabled deployment and admin role for LLM Judge", async () => {
+    const create = vi.fn().mockResolvedValue(evaluationDetail());
+    const repository = { create };
+    const disabled = createEvaluationService(repository, {
+      judgeEnabled: false,
+    });
+
+    expect(() =>
+      disabled.create(principal, {
+        datasetRevisionId: "00000000-0000-4000-8000-000000000001",
+        evaluator: judgeDefinition(),
+        traceSelector: {},
+      }),
+    ).toThrow(EvaluationValidationError);
+
+    const enabled = createEvaluationService(repository, {
+      judgeEnabled: true,
+    });
+    expect(() =>
+      enabled.create(principal, {
+        datasetRevisionId: "00000000-0000-4000-8000-000000000001",
+        evaluator: judgeDefinition(),
+        traceSelector: {},
+      }),
+    ).toThrow(EvaluationPermissionError);
+
+    await enabled.create(
+      { ...principal, subject: "admin-1", role: "admin" },
+      {
+        datasetRevisionId: "00000000-0000-4000-8000-000000000001",
+        evaluator: judgeDefinition(),
+        traceSelector: {},
+      },
+    );
+    expect(create).toHaveBeenCalledTimes(1);
+  });
 });
 
 function repository(
@@ -134,6 +172,20 @@ function repository(
     create: async () => evaluationDetail(),
     cancel: async () => evaluationDetail(),
     ...overrides,
+  };
+}
+
+function judgeDefinition() {
+  return {
+    name: "quality-judge",
+    version: 1,
+    kind: "llm_judge" as const,
+    config: {
+      model: "deepseek-flash",
+      rubric: "Pass when the answer is complete and grounded in the input.",
+      allowExternalContent: true as const,
+      temperature: 0,
+    },
   };
 }
 

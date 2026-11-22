@@ -8,6 +8,7 @@ import type { HumanAuth } from "../../application/auth.js";
 import {
   EvaluationCaseAmbiguousError,
   EvaluationNotFoundError,
+  EvaluationPermissionError,
   EvaluationValidationError,
   type EvaluationService,
 } from "../../application/evaluations.js";
@@ -105,6 +106,12 @@ function sendEvaluationError(reply: FastifyReply, error: unknown) {
   if (error instanceof EvaluationCaseAmbiguousError) {
     return reply.code(422).send({
       code: "EVALUATION_CASE_AMBIGUOUS",
+      message: error.message,
+    } satisfies ApiErrorResponse);
+  }
+  if (error instanceof EvaluationPermissionError) {
+    return reply.code(403).send({
+      code: "EVALUATION_PERMISSION_DENIED",
       message: error.message,
     } satisfies ApiErrorResponse);
   }

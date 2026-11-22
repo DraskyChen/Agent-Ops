@@ -18,6 +18,7 @@ import { createPool } from "../src/db/pool.js";
 import { createEvaluationWorker } from "../../worker/src/application/evaluate-rule-run.js";
 import { createPostgresEvaluationWorkerStore } from "../../worker/src/infrastructure/postgres/evaluation-worker-store.js";
 import { createObjectTextReader } from "../../worker/src/infrastructure/minio/object-reader.js";
+import { createObjectTextWriter } from "../../worker/src/infrastructure/minio/object-writer.js";
 import { createMinioContentStore } from "../src/infrastructure/minio/content-store.js";
 import { createPostgresMetricsRollupStore } from "../../worker/src/infrastructure/postgres/metrics-rollup-store.js";
 
@@ -34,6 +35,7 @@ describe.skipIf(!enabled)("operational review integration", () => {
   let candidateOutputContentId: string | undefined;
   let datasetId: string | undefined;
   let evaluationId: string | undefined;
+  let judgeEvaluationId: string | undefined;
   let metricBucket: Date;
   let app: FastifyInstance;
   let pool: Pool;
@@ -78,6 +80,7 @@ describe.skipIf(!enabled)("operational review integration", () => {
       pool,
       ingestToken: "integration-secret",
       traceMaxLatenessHours: 24,
+      evaluationJudgeEnabled: true,
       auth: {
         mode: "dev",
         sessionTtlHours: 8,
@@ -157,14 +160,18 @@ describe.skipIf(!enabled)("operational review integration", () => {
   afterAll(async () => {
     await app?.close();
     if (pool !== undefined) {
+      const cleanupObjectKeys: string[] = [];
       await pool.query("delete from feedback where trace_id = $1", [traceId]);
       await pool.query("delete from traces where trace_id = $1", [traceId]);
-      if (evaluationId !== undefined) {
-        await pool.query("delete from evaluation_runs where id = $1", [
-          evaluationId,
-        ]);
+      const evaluationIds = [evaluationId, judgeEvaluationId].filter(
+        (id): id is string => id !== undefined,
+      );
+      for (const id of evaluationIds) {
+        await pool.query("delete from evaluation_runs where id = $1", [id]);
+      }
+      if (evaluationIds.length > 0) {
         await pool.query(
-          "delete from evaluator_versions where name like 'exact-integration-%'",
+          "delete from evaluator_versions where name like '%integration-%'",
         );
       }
       if (datasetId !== undefined) {
@@ -172,22 +179,24 @@ describe.skipIf(!enabled)("operational review integration", () => {
           "select object_key from content_objects where owner_app = $1",
           ["agent-ops-datasets"],
         );
+        cleanupObjectKeys.push(...copied.rows.map((row) => row.object_key));
         await pool.query("delete from datasets where id = $1", [datasetId]);
         await pool.query(
           "delete from content_objects where owner_app = $1",
           ["agent-ops-datasets"],
         );
-        const blobs = createMinioContentStore({
-          endpoint: "http://127.0.0.1:9000",
-          region: "us-east-1",
-          bucket: "agent-ops-content",
-          accessKey: "agent_ops",
-          secretKey: "agent_ops_dev_secret",
-        });
-        for (const row of copied.rows) {
-          await blobs.delete(row.object_key).catch(() => undefined);
-        }
       }
+      const judgeContent = await pool.query<{ object_key: string }>(
+        "select object_key from content_objects where owner_app = $1",
+        ["agent-ops-evaluation"],
+      );
+      cleanupObjectKeys.push(
+        ...judgeContent.rows.map((row) => row.object_key),
+      );
+      await pool.query(
+        "delete from content_objects where owner_app = $1",
+        ["agent-ops-evaluation"],
+      );
       const sourceContent = await pool.query<{ object_key: string }>(
         "select object_key from content_objects where content_id = any($1::uuid[])",
         [datasetContentIds],
@@ -216,7 +225,10 @@ describe.skipIf(!enabled)("operational review integration", () => {
         secretKey: "agent_ops_dev_secret",
       });
       for (const row of sourceContent.rows) {
-        await blobs.delete(row.object_key).catch(() => undefined);
+        cleanupObjectKeys.push(row.object_key);
+      }
+      for (const objectKey of cleanupObjectKeys) {
+        await blobs.delete(objectKey).catch(() => undefined);
       }
       await pool.query(
         `delete from trace_metrics_hourly
@@ -526,6 +538,13 @@ describe.skipIf(!enabled)("operational review integration", () => {
           accessKey: "agent_ops",
           secretKey: "agent_ops_dev_secret",
         }),
+        createObjectTextWriter({
+          endpoint: "http://127.0.0.1:9000",
+          region: "us-east-1",
+          bucket: "agent-ops-content",
+          accessKey: "agent_ops",
+          secretKey: "agent_ops_dev_secret",
+        }),
       ),
     );
     await expect(evaluationWorker.processNextRun()).resolves.toBe(true);
@@ -562,6 +581,95 @@ describe.skipIf(!enabled)("operational review integration", () => {
     expect(score.rows[0]).toMatchObject({
       source: "rule",
       value: { score: 1, pass: true },
+    });
+
+    const judgeEvaluation = await app.inject({
+      method: "POST",
+      url: "/api/v1/evaluations",
+      payload: {
+        datasetRevisionId: revisionBody.revisionId,
+        evaluator: {
+          name: `judge-integration-${randomUUID()}`,
+          version: 1,
+          kind: "llm_judge",
+          config: {
+            model: "deepseek-flash",
+            rubric:
+              "Pass only when the candidate is complete, correct, and grounded in the input.",
+            allowExternalContent: true,
+            temperature: 0,
+          },
+        },
+        traceSelector: {
+          appName: "integration-app",
+          promptVersion: "prompt-v2",
+          startedAfter: new Date(Date.now() - 60 * 60 * 1000).toISOString(),
+          startedBefore: new Date(Date.now() + 60 * 1000).toISOString(),
+        },
+      },
+    });
+    expect(judgeEvaluation.statusCode).toBe(201);
+    judgeEvaluationId = (
+      judgeEvaluation.json() as { evaluationId: string }
+    ).evaluationId;
+    const judgeWorker = createEvaluationWorker(
+      createPostgresEvaluationWorkerStore(
+        pool,
+        createObjectTextReader({
+          endpoint: "http://127.0.0.1:9000",
+          region: "us-east-1",
+          bucket: "agent-ops-content",
+          accessKey: "agent_ops",
+          secretKey: "agent_ops_dev_secret",
+        }),
+        createObjectTextWriter({
+          endpoint: "http://127.0.0.1:9000",
+          region: "us-east-1",
+          bucket: "agent-ops-content",
+          accessKey: "agent_ops",
+          secretKey: "agent_ops_dev_secret",
+        }),
+      ),
+      {
+        judgeClient: {
+          evaluate: async () => ({
+            content:
+              '{"score":0.9,"pass":true,"reason":"Complete and grounded","category":"correct"}',
+            inputTokens: 40,
+            outputTokens: 12,
+          }),
+        },
+      },
+    );
+    await expect(judgeWorker.processNextRun()).resolves.toBe(true);
+
+    const judged = await app.inject({
+      method: "GET",
+      url: `/api/v1/evaluations/${judgeEvaluationId}`,
+    });
+    expect(judged.statusCode).toBe(200);
+    expect(judged.json()).toMatchObject({
+      status: "completed",
+      evaluatorKind: "llm_judge",
+      scoredCases: 1,
+      passedCases: 1,
+      averageScore: 0.9,
+      cases: [
+        {
+          status: "completed",
+          score: 0.9,
+          passed: true,
+          judgeCall: {
+            status: "completed",
+            provider: "deepseek",
+            model: "deepseek-flash",
+            promptContentRef: expect.any(String),
+            responseContentRef: expect.any(String),
+            inputTokens: 40,
+            outputTokens: 12,
+          },
+        },
+      ],
     });
   });
 });

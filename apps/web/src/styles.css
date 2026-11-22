@@ -2330,6 +2330,24 @@ tbody tr:last-child td {
   gap: 9px;
 }
 
+.judge-consent {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  padding: 9px;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  background: var(--surface-muted);
+  color: var(--text-secondary);
+  font-size: 9px;
+  line-height: 1.5;
+}
+
+.judge-consent input {
+  margin: 1px 0 0;
+  accent-color: var(--accent);
+}
+
 .revision-items {
   display: grid;
   gap: 10px;

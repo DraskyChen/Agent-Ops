@@ -4,7 +4,8 @@ import type {
   EvaluationDetail,
   EvaluationSummary,
   EvaluationTraceSelector,
-  RuleEvaluatorDefinition,
+  EvaluatorDefinition,
+  LlmJudgeDefinition,
 } from "@agent-ops/contracts";
 
 import type { HumanPrincipal } from "./auth.js";
@@ -20,7 +21,7 @@ export interface NormalizedEvaluationTraceSelector {
 
 export interface NormalizedEvaluationCreate {
   datasetRevisionId: string;
-  evaluator: RuleEvaluatorDefinition;
+  evaluator: EvaluatorDefinition;
   traceSelector: NormalizedEvaluationTraceSelector;
 }
 
@@ -46,6 +47,7 @@ export interface EvaluationService {
 
 export interface EvaluationServiceOptions {
   now?: () => Date;
+  judgeEnabled?: boolean;
 }
 
 export class EvaluationValidationError extends Error {
@@ -69,9 +71,16 @@ export class EvaluationCaseAmbiguousError extends Error {
   }
 }
 
+export class EvaluationPermissionError extends Error {
+  constructor(message: string) {
+    super(message);
+    this.name = "EvaluationPermissionError";
+  }
+}
+
 const UUID_PATTERN =
   /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
-const EVALUATOR_KINDS = new Set<RuleEvaluatorDefinition["kind"]>([
+const EVALUATOR_KINDS = new Set<EvaluatorDefinition["kind"]>([
   "exact",
   "contains",
   "regex",
@@ -79,6 +88,7 @@ const EVALUATOR_KINDS = new Set<RuleEvaluatorDefinition["kind"]>([
   "max_latency_ms",
   "max_cost_micros",
   "max_tool_errors",
+  "llm_judge",
 ]);
 const ENVIRONMENTS = new Set<Environment>(["prod", "staging", "dev", "test"]);
 
@@ -87,6 +97,7 @@ export function createEvaluationService(
   options: EvaluationServiceOptions = {},
 ): EvaluationService {
   const now = options.now ?? (() => new Date());
+  const judgeEnabled = options.judgeEnabled ?? false;
   return {
     list() {
       return repository.list();
@@ -100,6 +111,21 @@ export function createEvaluationService(
     },
 
     create(principal, input) {
+      if (typeof input !== "object" || input === null) {
+        throw new EvaluationValidationError("Request body must be an object");
+      }
+      if (input.evaluator?.kind === "llm_judge") {
+        if (!judgeEnabled) {
+          throw new EvaluationValidationError(
+            "LLM Judge is disabled for this deployment",
+          );
+        }
+        if (principal.role !== "admin") {
+          throw new EvaluationPermissionError(
+            "Administrator access is required for LLM Judge",
+          );
+        }
+      }
       return repository.create(
         principal,
         normalizeEvaluationCreate(input, now()),
@@ -133,8 +159,8 @@ export function normalizeEvaluationCreate(
 }
 
 function normalizeEvaluator(
-  input: RuleEvaluatorDefinition,
-): RuleEvaluatorDefinition {
+  input: EvaluatorDefinition,
+): EvaluatorDefinition {
   if (typeof input !== "object" || input === null) {
     throw new EvaluationValidationError("evaluator must be an object");
   }
@@ -216,7 +242,51 @@ function normalizeEvaluator(
         kind: input.kind,
         config: { value: input.config.value },
       };
+    case "llm_judge":
+      return normalizeLlmJudge({ ...input, name });
   }
+}
+
+function normalizeLlmJudge(input: LlmJudgeDefinition): LlmJudgeDefinition {
+  if (input.config.allowExternalContent !== true) {
+    throw new EvaluationValidationError(
+      "llm_judge requires allowExternalContent=true",
+    );
+  }
+  const model = requiredText(input.config.model, "evaluator.config.model", 120);
+  const rubric = requiredText(
+    input.config.rubric,
+    "evaluator.config.rubric",
+    8000,
+  );
+  if (rubric.length < 20) {
+    throw new EvaluationValidationError(
+      "evaluator.config.rubric must be at least 20 characters",
+    );
+  }
+  if (
+    input.config.temperature !== undefined &&
+    (!Number.isFinite(input.config.temperature) ||
+      input.config.temperature < 0 ||
+      input.config.temperature > 2)
+  ) {
+    throw new EvaluationValidationError(
+      "evaluator.config.temperature must be between 0 and 2",
+    );
+  }
+  return {
+    name: input.name,
+    version: input.version,
+    kind: "llm_judge",
+    config: {
+      model,
+      rubric,
+      allowExternalContent: true,
+      ...(input.config.temperature === undefined
+        ? {}
+        : { temperature: input.config.temperature }),
+    },
+  };
 }
 
 function normalizeSelector(

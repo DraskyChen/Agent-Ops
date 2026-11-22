@@ -364,6 +364,22 @@ export type RuleEvaluatorDefinition =
       config: { value: number };
     };
 
+export interface LlmJudgeDefinition {
+  name: string;
+  version: number;
+  kind: "llm_judge";
+  config: {
+    model: string;
+    rubric: string;
+    allowExternalContent: true;
+    temperature?: number;
+  };
+}
+
+export type EvaluatorDefinition =
+  | RuleEvaluatorDefinition
+  | LlmJudgeDefinition;
+
 export interface EvaluationTraceSelector {
   appName?: string;
   promptVersion?: string;
@@ -375,7 +391,7 @@ export interface EvaluationTraceSelector {
 
 export interface EvaluationCreateRequest {
   datasetRevisionId: string;
-  evaluator: RuleEvaluatorDefinition;
+  evaluator: EvaluatorDefinition;
   traceSelector: EvaluationTraceSelector;
 }
 
@@ -401,7 +417,7 @@ export interface EvaluationSummary {
   datasetRevision: number;
   evaluatorName: string;
   evaluatorVersion: number;
-  evaluatorKind: RuleEvaluatorDefinition["kind"];
+  evaluatorKind: EvaluatorDefinition["kind"];
   status: EvaluationStatus;
   totalCases: number;
   scoredCases: number;
@@ -428,6 +444,18 @@ export interface EvaluationCaseResult {
   passed: boolean | null;
   reason: string | null;
   error: string | null;
+  judgeCall: JudgeCallSummary | null;
+}
+
+export interface JudgeCallSummary {
+  status: "pending" | "completed" | "failed";
+  provider: "deepseek";
+  model: string;
+  promptContentRef: string | null;
+  responseContentRef: string | null;
+  inputTokens: number | null;
+  outputTokens: number | null;
+  costMicros: number | null;
 }
 
 export interface EvaluationDetail extends EvaluationSummary {

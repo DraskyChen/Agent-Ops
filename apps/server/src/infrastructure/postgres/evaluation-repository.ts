@@ -5,7 +5,7 @@ import type {
   EvaluationStatus,
   EvaluationSummary,
   EvaluationTraceSelector,
-  RuleEvaluatorDefinition,
+  EvaluatorDefinition,
 } from "@agent-ops/contracts";
 import type { Pool, PoolClient } from "pg";
 
@@ -169,7 +169,7 @@ export function createPostgresEvaluationRepository(
 async function ensureEvaluatorVersion(
   client: PoolClient,
   principal: HumanPrincipal,
-  evaluator: RuleEvaluatorDefinition,
+  evaluator: EvaluatorDefinition,
 ): Promise<{ id: string; kind: string; config: unknown }> {
   const existing = await client.query<EvaluatorRow>(
     `select id, name, version, kind, config
@@ -284,11 +284,19 @@ async function loadEvaluation(
   }
   const cases = await pool.query<EvaluationCaseRow>(
     `select
-      id as evaluation_case_id, dataset_item_id, case_id,
-      candidate_trace_id, status, score, passed, reason, error
-    from evaluation_cases
-    where evaluation_run_id = $1
-    order by case_id`,
+      c.id as evaluation_case_id, c.dataset_item_id, c.case_id,
+      c.candidate_trace_id, c.status, c.score, c.passed, c.reason, c.error,
+      j.status as judge_status, j.provider as judge_provider,
+      j.model as judge_model, j.prompt_content_ref, j.response_content_ref,
+      j.input_tokens as judge_input_tokens,
+      j.output_tokens as judge_output_tokens,
+      j.cost_micros as judge_cost_micros
+    from evaluation_cases c
+    left join judge_calls j
+      on j.evaluation_run_id = c.evaluation_run_id
+      and j.evaluation_case_id = c.id
+    where c.evaluation_run_id = $1
+    order by c.case_id`,
     [evaluationId],
   );
   return {
@@ -350,7 +358,7 @@ interface EvaluationSummaryRow {
   dataset_revision: number;
   evaluator_name: string;
   evaluator_version: number;
-  evaluator_kind: RuleEvaluatorDefinition["kind"];
+  evaluator_kind: EvaluatorDefinition["kind"];
   trace_selector: unknown;
   status: string;
   total_cases: number;
@@ -378,6 +386,14 @@ interface EvaluationCaseRow {
   passed: boolean | null;
   reason: string | null;
   error: string | null;
+  judge_status: "pending" | "completed" | "failed" | null;
+  judge_provider: "deepseek" | null;
+  judge_model: string | null;
+  prompt_content_ref: string | null;
+  response_content_ref: string | null;
+  judge_input_tokens: string | null;
+  judge_output_tokens: string | null;
+  judge_cost_micros: string | null;
 }
 
 function mapEvaluationSummary(row: EvaluationSummaryRow): EvaluationSummary {
@@ -419,6 +435,30 @@ function mapEvaluationCase(row: EvaluationCaseRow): EvaluationCaseResult {
     passed: row.passed,
     reason: row.reason,
     error: row.error,
+    judgeCall:
+      row.judge_status === null ||
+      row.judge_provider === null ||
+      row.judge_model === null
+        ? null
+        : {
+            status: row.judge_status,
+            provider: row.judge_provider,
+            model: row.judge_model,
+            promptContentRef: row.prompt_content_ref,
+            responseContentRef: row.response_content_ref,
+            inputTokens:
+              row.judge_input_tokens === null
+                ? null
+                : Number(row.judge_input_tokens),
+            outputTokens:
+              row.judge_output_tokens === null
+                ? null
+                : Number(row.judge_output_tokens),
+            costMicros:
+              row.judge_cost_micros === null
+                ? null
+                : Number(row.judge_cost_micros),
+          },
   };
 }
 

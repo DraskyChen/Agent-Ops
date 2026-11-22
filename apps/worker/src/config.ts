@@ -13,6 +13,14 @@ export interface WorkerConfig {
   rootSealGraceMs: number;
   idleTimeoutMs: number;
   contentCleanupIntervalMs: number;
+  evaluationJudgeEnabled: boolean;
+  judgeContentRetentionDays: number;
+  deepseek: {
+    apiKey: string | null;
+    baseUrl: string;
+    model: string;
+    timeoutMs: number;
+  };
   content: MinioContentConfig;
 }
 
@@ -22,6 +30,18 @@ const DEFAULT_DATABASE_URL =
 export function loadWorkerConfig(
   environment: NodeJS.ProcessEnv = process.env,
 ): WorkerConfig {
+  const evaluationJudgeEnabled =
+    environment.EVALUATION_JUDGE_ENABLED === "true";
+  const deepseekApiKey =
+    environment.DEEPSEEK_API_KEY === undefined ||
+    environment.DEEPSEEK_API_KEY.trim() === ""
+      ? null
+      : environment.DEEPSEEK_API_KEY.trim();
+  if (evaluationJudgeEnabled && deepseekApiKey === null) {
+    throw new Error(
+      "DEEPSEEK_API_KEY is required when EVALUATION_JUDGE_ENABLED=true",
+    );
+  }
   return {
     databaseUrl: environment.DATABASE_URL ?? DEFAULT_DATABASE_URL,
     databasePoolSize: positiveInteger(
@@ -44,6 +64,20 @@ export function loadWorkerConfig(
       environment.CONTENT_CLEANUP_INTERVAL_MS ?? "900000",
       "CONTENT_CLEANUP_INTERVAL_MS",
     ),
+    evaluationJudgeEnabled,
+    judgeContentRetentionDays: positiveInteger(
+      environment.JUDGE_CONTENT_RETENTION_DAYS ?? "180",
+      "JUDGE_CONTENT_RETENTION_DAYS",
+    ),
+    deepseek: {
+      apiKey: deepseekApiKey,
+      baseUrl: environment.DEEPSEEK_BASE_URL ?? "https://api.deepseek.com",
+      model: environment.DEEPSEEK_MODEL ?? "deepseek-flash",
+      timeoutMs: positiveInteger(
+        environment.DEEPSEEK_TIMEOUT_MS ?? "60000",
+        "DEEPSEEK_TIMEOUT_MS",
+      ),
+    },
     content: {
       endpoint: environment.S3_ENDPOINT ?? "http://127.0.0.1:9000",
       region: environment.S3_REGION ?? "us-east-1",

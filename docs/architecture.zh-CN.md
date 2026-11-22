@@ -566,7 +566,9 @@ price_versions
 
 数据集修订不可变，条目保存独立的输入、基线和期望内容快照。评测运行固定
 数据集修订和评测器版本，通过 `agent.eval.case_id` 严格匹配候选 Trace；
-确定性规则由 Worker 异步执行，并将结果追加写入 `scores`。
+确定性规则和经管理员显式启用的 DeepSeek Judge 由 Worker 异步执行。
+Judge 只接受固定 `score/pass/reason/category` 结构，并将脱敏后的
+Prompt 与原始响应作为独立内容对象审计，结果追加写入 `scores`。
 
 `price_versions` 只追加、不原地修改。对每个 LLM Span，Worker 按提供方、模型、币种、价格档位和 Span 开始时间选择价目版本，将计算出的 `cost_micros` 和 `price_version_id` 写入 Span，再汇总到 Trace 投影。DeepSeek 高峰/低峰规则见 [pricing.md](pricing.md)。
 

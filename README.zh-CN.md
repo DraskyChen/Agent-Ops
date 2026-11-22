@@ -50,11 +50,13 @@ TypeScript 或 Python Agent
   JSON、延迟、成本和工具错误规则评测。
 - Dataset 和 Evaluation 控制台，支持创建修订、发起规则评测、自动刷新
   运行状态和查看逐用例结果。
+- 管理员启用的 DeepSeek LLM Judge，固定结构化评分、外发确认、
+  Prompt/响应审计、Token 用量和失败重试。
 - 独立的 PostgreSQL 和 MinIO 开发环境。
 
 尚未完成：
 
-- DeepSeek LLM Judge 和版本对比页面。
+- 双评测运行版本对比页面。
 
 ## 本地开发
 

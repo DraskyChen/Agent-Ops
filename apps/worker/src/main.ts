@@ -5,12 +5,14 @@ import { createContentRetentionWorker } from "./application/content-retention.js
 import { createEvaluationWorker } from "./application/evaluate-rule-run.js";
 import { createMetricsRollupWorker } from "./application/metrics-rollup.js";
 import { loadWorkerConfig } from "./config.js";
+import { createDeepSeekJudgeClient } from "./infrastructure/deepseek/judge-client.js";
 import { createPostgresAggregationJobStore } from "./infrastructure/postgres/aggregation-job-store.js";
 import { createPostgresContentRetentionRepository } from "./infrastructure/postgres/content-retention-repository.js";
 import { createPostgresEvaluationWorkerStore } from "./infrastructure/postgres/evaluation-worker-store.js";
 import { createPostgresMetricsRollupStore } from "./infrastructure/postgres/metrics-rollup-store.js";
 import { createMinioContentDeleter } from "./infrastructure/minio/content-deleter.js";
 import { createObjectTextReader } from "./infrastructure/minio/object-reader.js";
+import { createObjectTextWriter } from "./infrastructure/minio/object-writer.js";
 
 const config = loadWorkerConfig();
 const pool = new pg.Pool({
@@ -33,7 +35,21 @@ const evaluationWorker = createEvaluationWorker(
   createPostgresEvaluationWorkerStore(
     pool,
     createObjectTextReader(config.content),
+    createObjectTextWriter(config.content),
+    config.judgeContentRetentionDays,
   ),
+  {
+    ...(config.evaluationJudgeEnabled &&
+    config.deepseek.apiKey !== null
+      ? {
+          judgeClient: createDeepSeekJudgeClient({
+            apiKey: config.deepseek.apiKey,
+            baseUrl: config.deepseek.baseUrl,
+            timeoutMs: config.deepseek.timeoutMs,
+          }),
+        }
+      : {}),
+  },
 );
 let stopping = false;
 let nextContentCleanupAt = 0;

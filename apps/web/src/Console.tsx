@@ -239,7 +239,10 @@ export function Console() {
         ) : page === "datasets" ? (
           <DatasetsPage canManage={canManage(explorer.me.role)} />
         ) : page === "evaluations" ? (
-          <EvaluationsPage canManage={canManage(explorer.me.role)} />
+          <EvaluationsPage
+            canManage={canManage(explorer.me.role)}
+            canJudge={explorer.me.role === "admin"}
+          />
         ) : explorer.selectedTraceId === null ? (
           <TraceListPage
             traces={explorer.traces}

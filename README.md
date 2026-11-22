@@ -55,11 +55,13 @@ Implemented:
   exact, contains, regex, JSON, latency, cost, and tool-error rules.
 - Dataset and Evaluation consoles for creating revisions, starting rule
   evaluations, polling run status, and inspecting per-case results.
+- Admin-enabled DeepSeek LLM Judge with structured scoring, explicit external
+  content consent, prompt/response auditing, token usage, and validation retry.
 - Independent PostgreSQL and MinIO development stack.
 
 Not implemented yet:
 
-- DeepSeek LLM judge execution and version comparison pages.
+- Two-run version comparison pages.
 
 ## Local development
 

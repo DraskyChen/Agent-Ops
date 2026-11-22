@@ -629,7 +629,10 @@ Dataset revisions are immutable, and items snapshot input, baseline output, and
 expected output content independently from trace retention. Evaluation runs pin
 a dataset revision and evaluator version, match candidate traces by
 `agent.eval.case_id`, and execute deterministic rules asynchronously in the
-worker before appending scores.
+worker before appending scores. The admin-enabled DeepSeek judge uses the same
+run model, requires explicit external-content consent, validates a fixed
+`score/pass/reason/category` response, and audits prompt/response objects and
+token usage.
 
 `price_versions` is insert-only. For each LLM span, the worker selects the
 version matching provider, model, currency, pricing tier, and span start time,
