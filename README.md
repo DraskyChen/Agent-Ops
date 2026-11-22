@@ -66,6 +66,9 @@ Implemented:
   list/search/detail latency, and storage.
 - SHA-256-checked PostgreSQL/MinIO backups, an explicitly confirmed full-restore
   script, and a real development-stack restore drill.
+- CI gates for quality, real-dependency integration, and all image targets,
+  plus production config validation, release smoke checks, and an
+  OIDC/SDK/backup/rollback runbook.
 - Independent PostgreSQL and MinIO development stack.
 
 Not implemented yet:

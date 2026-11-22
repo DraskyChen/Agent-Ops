@@ -59,6 +59,8 @@ TypeScript 或 Python Agent
 - 独立数据库中的每天 100 万 Span 写入、列表、宽泛搜索、详情和存储基线。
 - 带 SHA-256 完整性校验的 PostgreSQL/MinIO 备份脚本、显式确认的完整恢复
   脚本，以及开发环境真实恢复演练。
+- CI 质量/集成/镜像构建流水线、生产配置占位符检查、发布冒烟脚本和
+  OIDC/SDK/备份/回滚运行手册。
 - 独立的 PostgreSQL 和 MinIO 开发环境。
 
 尚未完成：
