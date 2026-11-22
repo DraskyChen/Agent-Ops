@@ -42,6 +42,10 @@ Implemented:
 - Content access auditing, retention cleanup, and separate content viewing
   permission.
 - Ingest health, rejection reasons, aggregation backlog, and Web operations page.
+- Shared trace metric definitions with hourly PostgreSQL rollups and latency histograms.
+- Operational dashboard for volume, status, cost, latency, tool errors, and
+  application/model/task/version distributions.
+- Dashboard-to-trace drill-down with bucket-aligned time ranges and structured filters.
 - Live trace list, detail, review, and content console backed by the query API.
 - Independent PostgreSQL and MinIO development stack.
 
@@ -57,6 +61,7 @@ pnpm contracts:build
 pnpm architecture:check
 pnpm infra:up
 pnpm db:migrate
+pnpm metrics:backfill
 pnpm typecheck
 pnpm test
 pnpm test:integration
@@ -70,7 +75,15 @@ DOCKER_CONTEXT=orbstack pnpm infra:up
 
 `pnpm test:integration` requires the migrated PostgreSQL and MinIO development
 stack. It verifies filters, feedback idempotency, reviews, operations health,
-and expired-content auditing against the real database.
+expired-content auditing, metric rollups, and dashboard queries against the
+real database.
+
+`pnpm metrics:backfill` rebuilds hourly metric rollups from trace projections.
+Pass `--from` and `--to` ISO timestamps to limit a rebuild.
+
+`pnpm metrics:load-test` requires `METRICS_LOAD_TEST_DATABASE_URL` and a server
+connected to the same disposable database. It refuses to run without that
+explicit override.
 
 Python SDK:
 

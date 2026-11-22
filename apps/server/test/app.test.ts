@@ -273,6 +273,14 @@ function testDependencies(
         throw new Error("not configured");
       },
     },
+    metrics: {
+      overview: async () => {
+        throw new Error("not configured");
+      },
+      breakdown: async () => {
+        throw new Error("not configured");
+      },
+    },
     reviews: {
       create: async () => {
         throw new Error("not configured");

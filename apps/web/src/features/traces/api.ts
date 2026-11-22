@@ -32,9 +32,8 @@ export interface TracePage {
 export async function fetchTraces(
   filters: TraceFilters,
   cursor: string | null = null,
-  startedAfter = new Date(
-    Date.now() - rangeMilliseconds(filters.timeRange),
-  ).toISOString(),
+  startedAfter = filters.startedAfter ??
+    new Date(Date.now() - rangeMilliseconds(filters.timeRange)).toISOString(),
 ): Promise<TracePage> {
   const params = queryParameters(filters, startedAfter);
   if (cursor !== null) {
@@ -110,6 +109,9 @@ function queryParameters(
 ): URLSearchParams {
   const params = new URLSearchParams();
   params.set("startedAfter", startedAfter);
+  if (filters.startedBefore !== undefined) {
+    params.set("startedBefore", filters.startedBefore);
+  }
   setText(params, "search", filters.search);
   setFilter(params, "status", filters.status);
   setFilter(params, "environment", filters.environment);

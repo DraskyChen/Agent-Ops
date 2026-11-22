@@ -370,6 +370,8 @@ POST /api/v1/feedback
 POST /api/v1/traces/:traceId/reviews
 GET  /api/v1/operations/ingest
 GET  /api/v1/me
+GET  /api/v1/metrics/overview
+GET  /api/v1/metrics/breakdown
 POST /api/v1/scores
 ```
 
@@ -406,6 +408,11 @@ Trace detail returns:
 Metrics queries are added after the trace-reading path works. All UI metrics
 must use one metrics query service with a shared metric dictionary; pages do
 not issue their own aggregation SQL.
+
+Trace metrics are stored in hourly PostgreSQL rollups. The Worker rebuilds a
+complete hour when a trace projection changes, including its previous hour
+when a late span moves the trace. Percentiles use a fixed cumulative latency
+histogram and are displayed as estimates.
 
 ### 6.7 Web UI
 
@@ -763,6 +770,10 @@ inspect its inputs, outputs, model calls, and tool failure.
 - Capacity load test for the initial one-million-spans-per-day envelope.
 - Index and partition decision based on measured query plans.
 - Storage retention and archive jobs.
+
+Implemented in Phase 3: shared metric definitions, hourly rollups, estimated
+latency histograms, overview/breakdown APIs, and a dashboard with trace
+drill-down. Capacity evidence and metadata archive policy remain rollout work.
 
 Exit criterion: cost, status, latency, and tool failure rate use one agreed
 definition and can navigate to the underlying traces.

@@ -317,6 +317,8 @@ POST /api/v1/feedback
 POST /api/v1/traces/:traceId/reviews
 GET  /api/v1/operations/ingest
 GET  /api/v1/me
+GET  /api/v1/metrics/overview
+GET  /api/v1/metrics/breakdown
 POST /api/v1/scores
 ```
 
@@ -347,6 +349,10 @@ Trace 详情返回：
 - 数据接入完整度。
 
 指标查询在 Trace 读取链路跑通后再加入。所有 UI 指标必须通过统一的指标查询服务读取，并使用共享的指标字典；页面不得各自编写聚合 SQL。
+
+Trace 指标存储在 PostgreSQL 小时汇总表中。Trace 投影变化时，Worker 会重建
+对应完整小时；迟到 Span 改变起始小时后，旧小时也会重建。百分位由固定累计
+延迟直方图估算，并在 UI 中明确标注。
 
 ### 6.7 Web UI
 
@@ -671,6 +677,9 @@ SDK 和内容请求使用 TLS。应用机器凭证保存在 Agent 运行时的�
 - 针对每天 100 万 Span 初始容量的压测。
 - 基于实测查询计划的索引和分区决策。
 - 存储保留期和归档任务。
+
+Phase 3 已实现共享指标定义、小时汇总、估算延迟直方图、总览/分布 API，以及
+可下钻 Trace 的 Dashboard。容量证据和元数据归档策略仍属于上线前工作。
 
 退出标准：成本、状态、延迟和工具失败率均使用同一套经过确认的定义，并且可以从图表进入对应的 Trace。
 

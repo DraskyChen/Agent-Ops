@@ -10,6 +10,7 @@ import { registerHealthRoute } from "./http/routes/health.js";
 import { registerContentRoutes } from "./http/routes/content.js";
 import { registerFeedbackRoute } from "./http/routes/feedback.js";
 import { registerOtlpIngestRoute } from "./http/routes/ingest.js";
+import { registerMetricsRoutes } from "./http/routes/metrics.js";
 import { registerOperationsRoute } from "./http/routes/operations.js";
 import { registerReviewRoute } from "./http/routes/reviews.js";
 import { registerTraceRoutes } from "./http/routes/traces.js";
@@ -52,6 +53,11 @@ export function buildApp(options: BuildAppOptions): FastifyInstance {
   registerReviewRoute(
     app,
     options.dependencies.reviews,
+    options.dependencies.humanAuth,
+  );
+  registerMetricsRoutes(
+    app,
+    options.dependencies.metrics,
     options.dependencies.humanAuth,
   );
   registerOperationsRoute(

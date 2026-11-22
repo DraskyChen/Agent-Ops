@@ -171,6 +171,9 @@ importers:
       '@agent-ops/contracts':
         specifier: workspace:*
         version: link:../../packages/contracts
+      '@agent-ops/metrics':
+        specifier: workspace:*
+        version: link:../../packages/metrics
       '@fastify/cookie':
         specifier: 11.1.5
         version: 11.1.5
@@ -239,6 +242,12 @@ importers:
 
   apps/worker:
     dependencies:
+      '@agent-ops/contracts':
+        specifier: workspace:*
+        version: link:../../packages/contracts
+      '@agent-ops/metrics':
+        specifier: workspace:*
+        version: link:../../packages/metrics
       minio:
         specifier: 8.0.7
         version: 8.0.7
@@ -296,6 +305,19 @@ importers:
       tsx:
         specifier: 4.23.15
         version: 4.23.15
+      typescript:
+        specifier: 7.0.2
+        version: 7.0.2
+      vitest:
+        specifier: 5.1.1
+        version: 5.1.1(@opentelemetry/api@1.10.0)(@types/node@24.19.2)(vite@8.3.8(@types/node@24.19.2)(esbuild@0.28.2)(tsx@4.23.15)(yaml@2.9.1))
+
+  packages/metrics:
+    dependencies:
+      '@agent-ops/contracts':
+        specifier: workspace:*
+        version: link:../contracts
+    devDependencies:
       typescript:
         specifier: 7.0.2
         version: 7.0.2

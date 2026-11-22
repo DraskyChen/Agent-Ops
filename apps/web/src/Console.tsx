@@ -3,6 +3,7 @@ import {
   Braces,
   Database,
   FlaskConical,
+  LayoutDashboard,
   LayoutList,
   LockKeyhole,
   LogIn,
@@ -18,21 +19,32 @@ import {
   healthLabel,
   useServerHealth,
 } from "./features/health/useServerHealth.js";
+import {
+  DashboardPage,
+} from "./features/metrics/DashboardPage.js";
+import type {
+  DashboardDrilldown,
+} from "./features/metrics/model.js";
 import { OperationsPage } from "./features/operations/OperationsPage.js";
 import { TraceDetailPage } from "./features/traces/TraceDetailPage.js";
 import { TraceListPage } from "./features/traces/TraceListPage.js";
 import { useTraceExplorer } from "./features/traces/useTraceExplorer.js";
+import {
+  DEFAULT_FILTERS,
+  type TraceFilters,
+} from "./features/traces/model.js";
 
 type Theme = "light" | "dark";
-type ConsolePage = "traces" | "operations";
+type ConsolePage = "dashboards" | "traces" | "operations";
 
 export function Console() {
   const health = useServerHealth();
-  const explorer = useTraceExplorer();
+  const [initial] = useState(readInitialConsoleState);
+  const explorer = useTraceExplorer(initial.filters);
   const authError = new URLSearchParams(window.location.search).get(
     "authError",
   );
-  const [page, setPage] = useState<ConsolePage>("traces");
+  const [page, setPage] = useState<ConsolePage>(initial.page);
   const [theme, setTheme] = useState<Theme>(() =>
     window.localStorage.getItem("agent-ops-theme") === "dark" ? "dark" : "light",
   );
@@ -58,12 +70,23 @@ export function Console() {
         <nav className="side-nav" aria-label="Main navigation">
           <NavSection label="Observe">
             <NavItem
+              active={page === "dashboards"}
+              icon={<LayoutDashboard size={16} />}
+              label="Dashboards"
+              onClick={() => {
+                setPage("dashboards");
+                explorer.closeTrace();
+                updateConsoleUrl("dashboards");
+              }}
+            />
+            <NavItem
               active={page === "traces"}
               icon={<LayoutList size={16} />}
               label="Traces"
               onClick={() => {
                 setPage("traces");
                 explorer.closeTrace();
+                updateConsoleUrl("traces");
               }}
             />
             <NavItem
@@ -73,6 +96,7 @@ export function Console() {
               onClick={() => {
                 setPage("operations");
                 explorer.closeTrace();
+                updateConsoleUrl("operations");
               }}
             />
             <NavItem icon={<FlaskConical size={16} />} label="Evaluations" disabled />
@@ -113,7 +137,9 @@ export function Console() {
             <span>Agent Platform</span>
             <span>/</span>
             <strong>
-              {page === "operations"
+              {page === "dashboards"
+                ? "Dashboards"
+                : page === "operations"
                 ? "Operations"
                 : explorer.selectedTraceId === null
                   ? "Traces"
@@ -169,6 +195,16 @@ export function Console() {
           <AuthLoading />
         ) : explorer.me === null ? (
           <AuthRequired error={authError} />
+        ) : page === "dashboards" ? (
+          <DashboardPage
+            onDrilldown={(drilldown) => {
+              setPage("traces");
+              explorer.closeTrace();
+              const filters = traceFiltersFromDrilldown(drilldown);
+              explorer.replaceFilters(filters);
+              updateConsoleUrl("traces", filters);
+            }}
+          />
         ) : page === "operations" ? (
           <OperationsPage />
         ) : explorer.selectedTraceId === null ? (
@@ -250,6 +286,122 @@ async function signOut(): Promise<void> {
     credentials: "same-origin",
   });
   window.location.assign("/console");
+}
+
+function traceFiltersFromDrilldown(
+  drilldown: DashboardDrilldown,
+): TraceFilters {
+  return {
+    ...DEFAULT_FILTERS,
+    timeRange: "custom",
+    startedAfter: drilldown.startedAfter,
+    startedBefore: drilldown.startedBefore,
+    status:
+      drilldown.status === "success" ||
+      drilldown.status === "failed" ||
+      drilldown.status === "partial" ||
+      drilldown.status === "cancelled" ||
+      drilldown.status === "timeout"
+        ? drilldown.status
+        : "all",
+    hasErrors: drilldown.hasErrors ?? "all",
+    environment: drilldown.environment ?? "all",
+    appName: drilldown.appName ?? "",
+    taskType: drilldown.taskType ?? "",
+    model: drilldown.model ?? "",
+    promptVersion: drilldown.promptVersion ?? "",
+    serviceVersion: drilldown.serviceVersion ?? "",
+  };
+}
+
+function readInitialConsoleState(): {
+  page: ConsolePage;
+  filters: TraceFilters;
+} {
+  const params = new URLSearchParams(window.location.search);
+  const view = params.get("view");
+  const page: ConsolePage =
+    view === "dashboards" || view === "operations" ? view : "traces";
+  const startedAfter = params.get("startedAfter");
+  const startedBefore = params.get("startedBefore");
+  return {
+    page,
+    filters: {
+      ...DEFAULT_FILTERS,
+      ...(startedAfter === null
+        ? {}
+        : {
+            timeRange: "custom" as const,
+            startedAfter,
+            startedBefore: startedBefore ?? undefined,
+          }),
+      ...(params.get("status") === null
+        ? {}
+        : { status: params.get("status") as TraceFilters["status"] }),
+      ...(params.get("environment") === null
+        ? {}
+        : { environment: params.get("environment") ?? "all" }),
+      ...(params.get("appName") === null
+        ? {}
+        : { appName: params.get("appName") ?? "" }),
+      ...(params.get("taskType") === null
+        ? {}
+        : { taskType: params.get("taskType") ?? "" }),
+      ...(params.get("model") === null
+        ? {}
+        : { model: params.get("model") ?? "" }),
+      ...(params.get("promptVersion") === null
+        ? {}
+        : { promptVersion: params.get("promptVersion") ?? "" }),
+      ...(params.get("serviceVersion") === null
+        ? {}
+        : { serviceVersion: params.get("serviceVersion") ?? "" }),
+      ...(params.get("hasErrors") === "true" ||
+      params.get("hasErrors") === "false"
+        ? { hasErrors: params.get("hasErrors") as "true" | "false" }
+        : {}),
+    },
+  };
+}
+
+function updateConsoleUrl(
+  page: ConsolePage,
+  filters?: TraceFilters,
+): void {
+  const params = new URLSearchParams({ view: page });
+  if (filters !== undefined) {
+    if (filters.startedAfter !== undefined) {
+      params.set("startedAfter", filters.startedAfter);
+    }
+    if (filters.startedBefore !== undefined) {
+      params.set("startedBefore", filters.startedBefore);
+    }
+    if (filters.status !== "all") {
+      params.set("status", filters.status);
+    }
+    if (filters.environment !== "all") {
+      params.set("environment", filters.environment);
+    }
+    setText(params, "appName", filters.appName);
+    setText(params, "taskType", filters.taskType);
+    setText(params, "model", filters.model);
+    setText(params, "promptVersion", filters.promptVersion);
+    setText(params, "serviceVersion", filters.serviceVersion);
+    if (filters.hasErrors !== "all") {
+      params.set("hasErrors", filters.hasErrors);
+    }
+  }
+  window.history.pushState({}, "", `/console?${params.toString()}`);
+}
+
+function setText(
+  params: URLSearchParams,
+  key: string,
+  value: string,
+): void {
+  if (value.trim() !== "") {
+    params.set(key, value.trim());
+  }
 }
 
 function NavSection({

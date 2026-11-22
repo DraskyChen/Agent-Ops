@@ -118,13 +118,23 @@ export function TraceListPage({
           <Select
             label="Time"
             value={filters.timeRange}
-            onChange={(value) =>
-              setFilter("timeRange", value as TraceFilters["timeRange"])
-            }
+            onChange={(value) => {
+              if (value !== "custom") {
+                setFilter("startedAfter", undefined);
+                setFilter("startedBefore", undefined);
+              }
+              setFilter(
+                "timeRange",
+                value as TraceFilters["timeRange"],
+              );
+            }}
             options={[
               ["24h", "Last 24 hours"],
               ["7d", "Last 7 days"],
               ["30d", "Last 30 days"],
+              ...(filters.timeRange === "custom"
+                ? [["custom", "Selected chart bucket"] as [string, string]]
+                : []),
             ]}
           />
           <Select

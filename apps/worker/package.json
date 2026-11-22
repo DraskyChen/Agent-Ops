@@ -6,11 +6,15 @@
   "scripts": {
     "build": "tsc -p tsconfig.json",
     "dev": "tsx watch src/main.ts",
+    "metrics:backfill": "tsx src/scripts/backfill-metrics.ts",
+    "metrics:load-test": "tsx src/scripts/metrics-load-test.ts",
     "start": "node dist/main.js",
     "test": "vitest run",
     "typecheck": "tsc -p tsconfig.json --noEmit"
   },
   "dependencies": {
+    "@agent-ops/contracts": "workspace:*",
+    "@agent-ops/metrics": "workspace:*",
     "minio": "8.0.7",
     "pg": "8.23.1"
   },

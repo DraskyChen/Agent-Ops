@@ -1,5 +1,6 @@
 import { randomUUID } from "node:crypto";
 
+import { metricBucketStart } from "@agent-ops/metrics";
 import type { FastifyInstance } from "fastify";
 import type { Pool } from "pg";
 import {
@@ -13,12 +14,14 @@ import {
 import { buildApp } from "../src/app.js";
 import { createServerDependencies } from "../src/composition.js";
 import { createPool } from "../src/db/pool.js";
+import { createPostgresMetricsRollupStore } from "../../worker/src/infrastructure/postgres/metrics-rollup-store.js";
 
 const enabled = process.env.AGENT_OPS_INTEGRATION === "1";
 
 describe.skipIf(!enabled)("operational review integration", () => {
   const traceId = `trace-integration-${randomUUID()}`;
   const contentId = randomUUID();
+  let metricBucket: Date;
   let app: FastifyInstance;
   let pool: Pool;
 
@@ -29,6 +32,7 @@ describe.skipIf(!enabled)("operational review integration", () => {
         "postgres://agent_ops:agent_ops_dev@127.0.0.1:5433/agent_ops",
     });
     const now = new Date();
+    metricBucket = metricBucketStart(now, "hour");
     await pool.query(
       `insert into traces (
         trace_id, app_name, run_name, service_name, service_version,
@@ -55,6 +59,7 @@ describe.skipIf(!enabled)("operational review integration", () => {
       )`,
       [contentId, `integration/${contentId}.txt`, new Date(Date.now() - 1000)],
     );
+    await createPostgresMetricsRollupStore(pool).rebuildBucket(metricBucket);
 
     const dependencies = await createServerDependencies({
       pool,
@@ -94,6 +99,15 @@ describe.skipIf(!enabled)("operational review integration", () => {
       await pool.query("delete from content_objects where content_id = $1", [
         contentId,
       ]);
+      await pool.query(
+        `delete from trace_metrics_hourly
+         where bucket_start = $1 and app_name = 'integration-app'`,
+        [metricBucket],
+      );
+      await pool.query(
+        "delete from trace_metric_rollup_jobs where bucket_start = $1",
+        [metricBucket],
+      );
       await pool.end();
     }
   });
@@ -172,6 +186,35 @@ describe.skipIf(!enabled)("operational review integration", () => {
     expect(operations.json()).toMatchObject({
       windowHours: 24,
       aggregation: { failed: expect.any(Number) },
+    });
+
+    const metrics = await app.inject({
+      method: "GET",
+      url: `/api/v1/metrics/overview?appName=integration-app&startedAfter=${encodeURIComponent(
+        metricBucket.toISOString(),
+      )}&startedBefore=${encodeURIComponent(
+        new Date(metricBucket.getTime() + 60 * 60 * 1000).toISOString(),
+      )}`,
+    });
+    expect(metrics.statusCode).toBe(200);
+    expect(metrics.json()).toMatchObject({
+      summary: {
+        traceCount: 1,
+        statusCounts: { failed: 1 },
+      },
+    });
+
+    const breakdown = await app.inject({
+      method: "GET",
+      url: `/api/v1/metrics/breakdown?appName=integration-app&dimension=model&startedAfter=${encodeURIComponent(
+        metricBucket.toISOString(),
+      )}&startedBefore=${encodeURIComponent(
+        new Date(metricBucket.getTime() + 60 * 60 * 1000).toISOString(),
+      )}`,
+    });
+    expect(breakdown.statusCode).toBe(200);
+    expect(breakdown.json()).toMatchObject({
+      items: [{ value: "deepseek-flash", traceCount: 1 }],
     });
 
     const expired = await app.inject({

@@ -15,13 +15,15 @@ export type TraceStatus =
 export type SpanType = "agent" | "llm" | "tool" | "retrieval";
 export type SpanStatus = "ok" | "error" | "partial";
 export type InspectorTab = "input" | "output" | "metadata";
-export type TimeRange = "24h" | "7d" | "30d";
+export type TimeRange = "24h" | "7d" | "30d" | "custom";
 
 export interface TraceFilters {
   search: string;
   status: TraceStatus | "all";
   environment: string;
   timeRange: TimeRange;
+  startedAfter?: string;
+  startedBefore?: string;
   appName: string;
   taskType: string;
   model: string;

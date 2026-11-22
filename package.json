@@ -20,12 +20,14 @@
     "examples:python": "uv run --project examples/python python examples/python/run_all.py",
     "infra:up": "docker compose -f infra/docker-compose/compose.yaml up -d",
     "infra:down": "docker compose -f infra/docker-compose/compose.yaml down",
+    "metrics:backfill": "pnpm --filter @agent-ops/worker metrics:backfill",
+    "metrics:load-test": "pnpm --filter @agent-ops/worker metrics:load-test",
     "format:check": "pnpm -r --if-present format:check",
     "lint:python": "uv run --project packages/sdk-python ruff check packages/sdk-python",
     "test": "pnpm -r --if-present test",
     "test:integration": "pnpm --filter @agent-ops/server test:integration",
     "test:python": "uv run --project packages/sdk-python pytest -q",
-    "typecheck": "pnpm contracts:build && pnpm -r --workspace-concurrency=1 --if-present typecheck",
+    "typecheck": "pnpm contracts:build && pnpm --filter @agent-ops/metrics build && pnpm -r --workspace-concurrency=1 --if-present typecheck",
     "typecheck:python": "uv run --project packages/sdk-python mypy packages/sdk-python/src/agent_ops"
   }
 }
