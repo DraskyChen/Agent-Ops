@@ -320,6 +320,13 @@ GET  /api/v1/me
 GET  /api/v1/metrics/overview
 GET  /api/v1/metrics/breakdown
 POST /api/v1/scores
+GET  /api/v1/datasets
+POST /api/v1/datasets
+POST /api/v1/datasets/:datasetId/revisions
+GET  /api/v1/evaluations
+POST /api/v1/evaluations
+GET  /api/v1/evaluations/:evaluationId
+POST /api/v1/evaluations/:evaluationId/cancel
 ```
 
 `/api/v1/scores` 保留给后续评测阶段。用户 Feedback 使用应用凭证并通过
@@ -557,9 +564,9 @@ price_versions
   notes                  text nullable
 ```
 
-数据集基础表已随评测阶段引入。数据集修订不可变，条目保存独立的输入、
-基线和期望内容快照；评测运行、评测器和评分执行表在规则/LLM Judge
-Worker 实现时继续补充。
+数据集修订不可变，条目保存独立的输入、基线和期望内容快照。评测运行固定
+数据集修订和评测器版本，通过 `agent.eval.case_id` 严格匹配候选 Trace；
+确定性规则由 Worker 异步执行，并将结果追加写入 `scores`。
 
 `price_versions` 只追加、不原地修改。对每个 LLM Span，Worker 按提供方、模型、币种、价格档位和 Span 开始时间选择价目版本，将计算出的 `cost_micros` 和 `price_version_id` 写入 Span，再汇总到 Trace 投影。DeepSeek 高峰/低峰规则见 [pricing.md](pricing.md)。
 

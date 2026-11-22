@@ -3,6 +3,7 @@ import type { Pool } from "pg";
 import type { ServerDependencies } from "./application/dependencies.js";
 import { createContentService } from "./application/content.js";
 import { createDatasetService } from "./application/datasets.js";
+import { createEvaluationService } from "./application/evaluations.js";
 import { createFeedbackService } from "./application/feedback.js";
 import { createOtlpIngestService } from "./application/ingest.js";
 import { createMetricsService } from "./application/metrics.js";
@@ -17,6 +18,7 @@ import { createPostgresHumanAuthRepository } from "./infrastructure/postgres/aut
 import { createPostgresTraceBatchWriter } from "./infrastructure/postgres/ingest-writer.js";
 import { createPostgresContentRepository } from "./infrastructure/postgres/content-repository.js";
 import { createPostgresDatasetRepository } from "./infrastructure/postgres/dataset-repository.js";
+import { createPostgresEvaluationRepository } from "./infrastructure/postgres/evaluation-repository.js";
 import { createPostgresFeedbackRepository } from "./infrastructure/postgres/feedback-repository.js";
 import { createPostgresMetricsRepository } from "./infrastructure/postgres/metrics-repository.js";
 import { createPostgresOperationsRepository } from "./infrastructure/postgres/operations-repository.js";
@@ -83,6 +85,9 @@ export async function createServerDependencies(
       {
         contentRetentionDays: options.content.datasetRetentionDays,
       },
+    ),
+    evaluations: createEvaluationService(
+      createPostgresEvaluationRepository(options.pool),
     ),
     feedback: createFeedbackService(
       createPostgresFeedbackRepository(options.pool),

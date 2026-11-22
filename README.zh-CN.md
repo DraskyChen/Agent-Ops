@@ -46,12 +46,14 @@ TypeScript 或 Python Agent
 - 真实 Trace 列表、详情、审查和内容查看控制台。
 - TypeScript/Python SDK 的可选 `agent.eval.case_id`，用于跨版本严格配对。
 - 从已封口 Trace 创建不可变数据集修订，并复制输入、基线和期望输出内容。
+- 评测运行 API、按 `case_id` 匹配候选 Trace，以及精确、包含、正则、
+  JSON、延迟、成本和工具错误规则评测。
 - 独立的 PostgreSQL 和 MinIO 开发环境。
 
 尚未完成：
 
 - Dataset/Evaluation Web 工作流。
-- 评测运行、规则评测和 LLM Judge。
+- DeepSeek LLM Judge 和版本对比页面。
 
 ## 本地开发
 

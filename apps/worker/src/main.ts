@@ -2,12 +2,15 @@ import pg from "pg";
 
 import { createTraceAggregationWorker } from "./application/aggregate-trace-job.js";
 import { createContentRetentionWorker } from "./application/content-retention.js";
+import { createEvaluationWorker } from "./application/evaluate-rule-run.js";
 import { createMetricsRollupWorker } from "./application/metrics-rollup.js";
 import { loadWorkerConfig } from "./config.js";
 import { createPostgresAggregationJobStore } from "./infrastructure/postgres/aggregation-job-store.js";
 import { createPostgresContentRetentionRepository } from "./infrastructure/postgres/content-retention-repository.js";
+import { createPostgresEvaluationWorkerStore } from "./infrastructure/postgres/evaluation-worker-store.js";
 import { createPostgresMetricsRollupStore } from "./infrastructure/postgres/metrics-rollup-store.js";
 import { createMinioContentDeleter } from "./infrastructure/minio/content-deleter.js";
+import { createObjectTextReader } from "./infrastructure/minio/object-reader.js";
 
 const config = loadWorkerConfig();
 const pool = new pg.Pool({
@@ -26,6 +29,12 @@ const contentRetention = createContentRetentionWorker(
 const metricsRollup = createMetricsRollupWorker(
   createPostgresMetricsRollupStore(pool),
 );
+const evaluationWorker = createEvaluationWorker(
+  createPostgresEvaluationWorkerStore(
+    pool,
+    createObjectTextReader(config.content),
+  ),
+);
 let stopping = false;
 let nextContentCleanupAt = 0;
 
@@ -35,7 +44,8 @@ async function run(): Promise<void> {
     try {
       const processed = await worker.processNextJob();
       const metricsProcessed = await metricsRollup.processNextJob();
-      if (!processed && !metricsProcessed) {
+      const evaluationProcessed = await evaluationWorker.processNextRun();
+      if (!processed && !metricsProcessed && !evaluationProcessed) {
         if (Date.now() >= nextContentCleanupAt) {
           const result = await contentRetention.runOnce();
           nextContentCleanupAt =
@@ -47,7 +57,7 @@ async function run(): Promise<void> {
           }
         }
       }
-      if (!processed) {
+      if (!processed && !metricsProcessed && !evaluationProcessed) {
         await sleep(config.pollIntervalMs);
       }
     } catch (error) {

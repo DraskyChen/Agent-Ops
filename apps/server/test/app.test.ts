@@ -318,6 +318,14 @@ function testDependencies(
         throw new Error("not configured");
       },
     },
+    evaluations: {
+      list: async () => [],
+      get: async () => null,
+      create: async () => {
+        throw new Error("not configured");
+      },
+      cancel: async () => null,
+    },
     feedback: {
       create: async () => {
         throw new Error("not configured");

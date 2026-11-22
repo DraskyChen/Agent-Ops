@@ -320,6 +320,121 @@ export interface DatasetRevisionCreateRequest {
   items: DatasetItemDraft[];
 }
 
+export type RuleEvaluatorDefinition =
+  | {
+      name: string;
+      version: number;
+      kind: "exact";
+      config: { ignoreCase?: boolean };
+    }
+  | {
+      name: string;
+      version: number;
+      kind: "contains";
+      config: { value: string; ignoreCase?: boolean };
+    }
+  | {
+      name: string;
+      version: number;
+      kind: "regex";
+      config: { pattern: string; ignoreCase?: boolean };
+    }
+  | {
+      name: string;
+      version: number;
+      kind: "json_valid";
+      config: Record<string, never>;
+    }
+  | {
+      name: string;
+      version: number;
+      kind: "max_latency_ms";
+      config: { value: number };
+    }
+  | {
+      name: string;
+      version: number;
+      kind: "max_cost_micros";
+      config: { value: number };
+    }
+  | {
+      name: string;
+      version: number;
+      kind: "max_tool_errors";
+      config: { value: number };
+    };
+
+export interface EvaluationTraceSelector {
+  appName?: string;
+  promptVersion?: string;
+  serviceVersion?: string;
+  environment?: Environment;
+  startedAfter?: string;
+  startedBefore?: string;
+}
+
+export interface EvaluationCreateRequest {
+  datasetRevisionId: string;
+  evaluator: RuleEvaluatorDefinition;
+  traceSelector: EvaluationTraceSelector;
+}
+
+export type EvaluationStatus =
+  | "queued"
+  | "running"
+  | "completed"
+  | "failed"
+  | "cancelled";
+
+export type EvaluationCaseStatus =
+  | "pending"
+  | "missing"
+  | "unscorable"
+  | "completed"
+  | "failed";
+
+export interface EvaluationSummary {
+  evaluationId: string;
+  datasetId: string;
+  datasetName: string;
+  datasetRevisionId: string;
+  datasetRevision: number;
+  evaluatorName: string;
+  evaluatorVersion: number;
+  evaluatorKind: RuleEvaluatorDefinition["kind"];
+  status: EvaluationStatus;
+  totalCases: number;
+  scoredCases: number;
+  passedCases: number;
+  failedCases: number;
+  missingCases: number;
+  unscorableCases: number;
+  erroredCases: number;
+  averageScore: number | null;
+  requestedBy: string;
+  createdAt: string;
+  startedAt: string | null;
+  completedAt: string | null;
+  lastError: string | null;
+}
+
+export interface EvaluationCaseResult {
+  evaluationCaseId: string;
+  datasetItemId: string;
+  caseId: string;
+  candidateTraceId: string | null;
+  status: EvaluationCaseStatus;
+  score: number | null;
+  passed: boolean | null;
+  reason: string | null;
+  error: string | null;
+}
+
+export interface EvaluationDetail extends EvaluationSummary {
+  traceSelector: EvaluationTraceSelector;
+  cases: EvaluationCaseResult[];
+}
+
 export interface HealthResponse {
   status: "ok" | "degraded";
   schemaVersion: string;

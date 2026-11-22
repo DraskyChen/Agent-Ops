@@ -51,12 +51,14 @@ Implemented:
   cross-version pairing.
 - Immutable dataset revisions created from sealed traces, with copied input,
   baseline output, and expected output content.
+- Evaluation-run APIs, strict candidate matching by `case_id`, and deterministic
+  exact, contains, regex, JSON, latency, cost, and tool-error rules.
 - Independent PostgreSQL and MinIO development stack.
 
 Not implemented yet:
 
 - Dataset and Evaluation web workflows.
-- Evaluation runs, rule evaluators, and LLM judge execution.
+- DeepSeek LLM judge execution and version comparison pages.
 
 ## Local development
 

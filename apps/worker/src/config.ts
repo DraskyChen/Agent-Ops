@@ -1,3 +1,11 @@
+export interface MinioContentConfig {
+  endpoint: string;
+  region: string;
+  bucket: string;
+  accessKey: string;
+  secretKey: string;
+}
+
 export interface WorkerConfig {
   databaseUrl: string;
   databasePoolSize: number;
@@ -5,13 +13,7 @@ export interface WorkerConfig {
   rootSealGraceMs: number;
   idleTimeoutMs: number;
   contentCleanupIntervalMs: number;
-  content: {
-    endpoint: string;
-    region: string;
-    bucket: string;
-    accessKey: string;
-    secretKey: string;
-  };
+  content: MinioContentConfig;
 }
 
 const DEFAULT_DATABASE_URL =
