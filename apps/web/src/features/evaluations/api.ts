@@ -1,5 +1,6 @@
 import type {
   EvaluationCreateRequest,
+  EvaluationComparison,
   EvaluationDetail,
   EvaluationSummary,
 } from "@agent-ops/contracts";
@@ -33,5 +34,14 @@ export async function cancelEvaluation(
   return postJson<EvaluationDetail, Record<string, never>>(
     `/api/v1/evaluations/${encodeURIComponent(evaluationId)}/cancel`,
     {},
+  );
+}
+
+export async function fetchEvaluationComparison(
+  baselineId: string,
+  candidateId: string,
+): Promise<EvaluationComparison> {
+  return getJson<EvaluationComparison>(
+    `/api/v1/evaluations/${encodeURIComponent(baselineId)}/compare/${encodeURIComponent(candidateId)}`,
   );
 }

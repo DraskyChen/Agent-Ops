@@ -569,6 +569,8 @@ price_versions
 确定性规则和经管理员显式启用的 DeepSeek Judge 由 Worker 异步执行。
 Judge 只接受固定 `score/pass/reason/category` 结构，并将脱敏后的
 Prompt 与原始响应作为独立内容对象审计，结果追加写入 `scores`。
+两个运行只有在数据集修订和评测器版本一致时才能比较；对比服务返回
+质量、平均成本、P95 延迟和逐用例差值。
 
 `price_versions` 只追加、不原地修改。对每个 LLM Span，Worker 按提供方、模型、币种、价格档位和 Span 开始时间选择价目版本，将计算出的 `cost_micros` 和 `price_version_id` 写入 Span，再汇总到 Trace 投影。DeepSeek 高峰/低峰规则见 [pricing.md](pricing.md)。
 

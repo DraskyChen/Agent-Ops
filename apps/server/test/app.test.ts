@@ -326,6 +326,9 @@ function testDependencies(
         throw new Error("not configured");
       },
       cancel: async () => null,
+      compare: async () => {
+        throw new Error("not configured");
+      },
     },
     feedback: {
       create: async () => {

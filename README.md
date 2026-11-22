@@ -57,11 +57,13 @@ Implemented:
   evaluations, polling run status, and inspecting per-case results.
 - Admin-enabled DeepSeek LLM Judge with structured scoring, explicit external
   content consent, prompt/response auditing, token usage, and validation retry.
+- Two-run comparison over the same dataset revision and evaluator version,
+  including pass rate, score, cost, P95 latency, and per-case deltas.
 - Independent PostgreSQL and MinIO development stack.
 
 Not implemented yet:
 
-- Two-run version comparison pages.
+- Single-team container release and production capacity validation.
 
 ## Local development
 

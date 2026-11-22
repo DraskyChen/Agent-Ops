@@ -418,6 +418,8 @@ export interface EvaluationSummary {
   evaluatorName: string;
   evaluatorVersion: number;
   evaluatorKind: EvaluatorDefinition["kind"];
+  candidateAppName: string | null;
+  candidatePromptVersion: string | null;
   status: EvaluationStatus;
   totalCases: number;
   scoredCases: number;
@@ -427,6 +429,9 @@ export interface EvaluationSummary {
   unscorableCases: number;
   erroredCases: number;
   averageScore: number | null;
+  averageCostMicros: number | null;
+  p50LatencyMs: number | null;
+  p95LatencyMs: number | null;
   requestedBy: string;
   createdAt: string;
   startedAt: string | null;
@@ -445,6 +450,8 @@ export interface EvaluationCaseResult {
   reason: string | null;
   error: string | null;
   judgeCall: JudgeCallSummary | null;
+  latencyMs: number | null;
+  costMicros: number | null;
 }
 
 export interface JudgeCallSummary {
@@ -461,6 +468,24 @@ export interface JudgeCallSummary {
 export interface EvaluationDetail extends EvaluationSummary {
   traceSelector: EvaluationTraceSelector;
   cases: EvaluationCaseResult[];
+}
+
+export interface EvaluationComparisonCase {
+  caseId: string;
+  baseline: EvaluationCaseResult | null;
+  candidate: EvaluationCaseResult | null;
+  scoreDelta: number | null;
+  latencyDeltaMs: number | null;
+  costDeltaMicros: number | null;
+}
+
+export interface EvaluationComparison {
+  baseline: EvaluationSummary;
+  candidate: EvaluationSummary;
+  pairedCases: number;
+  baselineOnlyCases: number;
+  candidateOnlyCases: number;
+  cases: EvaluationComparisonCase[];
 }
 
 export interface HealthResponse {

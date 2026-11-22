@@ -2124,6 +2124,126 @@ tbody tr:last-child td {
   grid-template-columns: repeat(3, minmax(0, 1fr));
 }
 
+.comparison-panel {
+  margin-bottom: 18px;
+  overflow: hidden;
+  border: 1px solid var(--border);
+  border-radius: 9px;
+  background: var(--surface);
+  box-shadow: var(--shadow-sm);
+}
+
+.comparison-controls {
+  display: grid;
+  grid-template-columns: minmax(220px, 1fr) minmax(150px, 190px)
+    minmax(150px, 190px) auto;
+  align-items: end;
+  gap: 10px;
+  padding: 13px;
+}
+
+.comparison-controls > div:first-child {
+  display: grid;
+  gap: 2px;
+}
+
+.comparison-controls strong {
+  font-size: 11px;
+}
+
+.comparison-controls small {
+  color: var(--text-muted);
+  font-size: 9px;
+}
+
+.comparison-result {
+  border-top: 1px solid var(--border);
+}
+
+.comparison-deltas {
+  display: grid;
+  grid-template-columns: repeat(5, minmax(0, 1fr));
+  border-bottom: 1px solid var(--border);
+}
+
+.comparison-deltas > div {
+  display: grid;
+  gap: 3px;
+  padding: 13px;
+}
+
+.comparison-deltas > div + div {
+  border-left: 1px solid var(--border);
+}
+
+.comparison-deltas span {
+  color: var(--text-muted);
+  font-size: 8px;
+  font-weight: 700;
+  letter-spacing: 0.07em;
+  text-transform: uppercase;
+}
+
+.comparison-deltas strong {
+  font-size: 16px;
+}
+
+.comparison-deltas small {
+  color: var(--text-muted);
+  font-size: 8px;
+}
+
+.comparison-cases {
+  overflow-x: auto;
+}
+
+.comparison-case-heading,
+.comparison-case-row {
+  display: grid;
+  grid-template-columns:
+    minmax(150px, 1.3fr) minmax(80px, 0.7fr) minmax(80px, 0.7fr)
+    minmax(70px, 0.55fr) minmax(80px, 0.65fr) minmax(80px, 0.65fr);
+  gap: 10px;
+  align-items: center;
+  min-width: 660px;
+  padding: 9px 13px;
+  border-bottom: 1px solid var(--border);
+}
+
+.comparison-case-heading {
+  background: var(--surface-muted);
+  color: var(--text-muted);
+  font-size: 8px;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+
+.comparison-case-row:last-child {
+  border-bottom: 0;
+}
+
+.comparison-case-row strong,
+.comparison-case-row span {
+  overflow: hidden;
+  font-size: 9px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.delta-value {
+  color: var(--text-muted);
+  font-variant-numeric: tabular-nums;
+}
+
+.delta-value.positive {
+  color: var(--success);
+}
+
+.delta-value.negative {
+  color: var(--danger, #a6372b);
+}
+
 .entity-layout {
   display: grid;
   grid-template-columns: minmax(280px, 340px) minmax(0, 1fr);
@@ -2556,6 +2676,15 @@ tbody tr:last-child td {
   .entity-layout {
     grid-template-columns: minmax(260px, 300px) minmax(0, 1fr);
   }
+
+  .comparison-controls {
+    grid-template-columns: minmax(200px, 1fr) repeat(2, minmax(130px, 170px));
+  }
+
+  .comparison-controls > .button {
+    grid-column: 2 / -1;
+    justify-self: end;
+  }
 }
 
 @media (max-width: 820px) {
@@ -2677,6 +2806,20 @@ tbody tr:last-child td {
 
   .entity-list {
     max-height: 240px;
+  }
+
+  .comparison-controls,
+  .comparison-deltas {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .comparison-controls > div:first-child {
+    grid-column: 1 / -1;
+  }
+
+  .comparison-controls > .button {
+    grid-column: 1 / -1;
+    justify-self: start;
   }
 
   .evaluation-summary-grid {

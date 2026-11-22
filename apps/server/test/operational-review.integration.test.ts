@@ -35,6 +35,7 @@ describe.skipIf(!enabled)("operational review integration", () => {
   let candidateOutputContentId: string | undefined;
   let datasetId: string | undefined;
   let evaluationId: string | undefined;
+  let baselineEvaluationId: string | undefined;
   let judgeEvaluationId: string | undefined;
   let metricBucket: Date;
   let app: FastifyInstance;
@@ -163,7 +164,11 @@ describe.skipIf(!enabled)("operational review integration", () => {
       const cleanupObjectKeys: string[] = [];
       await pool.query("delete from feedback where trace_id = $1", [traceId]);
       await pool.query("delete from traces where trace_id = $1", [traceId]);
-      const evaluationIds = [evaluationId, judgeEvaluationId].filter(
+      const evaluationIds = [
+        evaluationId,
+        baselineEvaluationId,
+        judgeEvaluationId,
+      ].filter(
         (id): id is string => id !== undefined,
       );
       for (const id of evaluationIds) {
@@ -491,13 +496,14 @@ describe.skipIf(!enabled)("operational review integration", () => {
       [candidateTraceId, candidateOutputContentId],
     );
 
+    const exactEvaluatorName = `exact-integration-${randomUUID()}`;
     const evaluationResponse = await app.inject({
       method: "POST",
       url: "/api/v1/evaluations",
       payload: {
         datasetRevisionId: revisionBody.revisionId,
         evaluator: {
-          name: `exact-integration-${randomUUID()}`,
+          name: exactEvaluatorName,
           version: 1,
           kind: "exact",
           config: {},
@@ -513,6 +519,29 @@ describe.skipIf(!enabled)("operational review integration", () => {
     expect(evaluationResponse.statusCode).toBe(201);
     evaluationId = (
       evaluationResponse.json() as { evaluationId: string }
+    ).evaluationId;
+    const baselineEvaluationResponse = await app.inject({
+      method: "POST",
+      url: "/api/v1/evaluations",
+      payload: {
+        datasetRevisionId: revisionBody.revisionId,
+        evaluator: {
+          name: exactEvaluatorName,
+          version: 1,
+          kind: "exact",
+          config: {},
+        },
+        traceSelector: {
+          appName: "integration-app",
+          promptVersion: "prompt-v1",
+          startedAfter: new Date(Date.now() - 60 * 60 * 1000).toISOString(),
+          startedBefore: new Date(Date.now() + 60 * 1000).toISOString(),
+        },
+      },
+    });
+    expect(baselineEvaluationResponse.statusCode).toBe(201);
+    baselineEvaluationId = (
+      baselineEvaluationResponse.json() as { evaluationId: string }
     ).evaluationId;
     const listedEvaluations = await app.inject({
       method: "GET",
@@ -548,6 +577,7 @@ describe.skipIf(!enabled)("operational review integration", () => {
       ),
     );
     await expect(evaluationWorker.processNextRun()).resolves.toBe(true);
+    await expect(evaluationWorker.processNextRun()).resolves.toBe(true);
 
     const evaluated = await app.inject({
       method: "GET",
@@ -581,6 +611,33 @@ describe.skipIf(!enabled)("operational review integration", () => {
     expect(score.rows[0]).toMatchObject({
       source: "rule",
       value: { score: 1, pass: true },
+    });
+
+    const comparison = await app.inject({
+      method: "GET",
+      url: `/api/v1/evaluations/${baselineEvaluationId}/compare/${evaluationId}`,
+    });
+    expect(comparison.statusCode).toBe(200);
+    expect(comparison.json()).toMatchObject({
+      pairedCases: 1,
+      baselineOnlyCases: 0,
+      candidateOnlyCases: 0,
+      baseline: {
+        candidatePromptVersion: "prompt-v1",
+        passedCases: 0,
+        averageScore: 0,
+      },
+      candidate: {
+        candidatePromptVersion: "prompt-v2",
+        passedCases: 1,
+        averageScore: 1,
+      },
+      cases: [
+        {
+          caseId: "refund-case-integration",
+          scoreDelta: 1,
+        },
+      ],
     });
 
     const judgeEvaluation = await app.inject({

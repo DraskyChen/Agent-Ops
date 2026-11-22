@@ -21,6 +21,8 @@ export type {
   DatasetSummary,
   EvaluationCaseResult,
   EvaluationCaseStatus,
+  EvaluationComparison,
+  EvaluationComparisonCase,
   EvaluationCreateRequest,
   EvaluationDetail,
   EvaluationStatus,

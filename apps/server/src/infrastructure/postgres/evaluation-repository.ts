@@ -286,6 +286,8 @@ async function loadEvaluation(
     `select
       c.id as evaluation_case_id, c.dataset_item_id, c.case_id,
       c.candidate_trace_id, c.status, c.score, c.passed, c.reason, c.error,
+      t.duration_ms as candidate_latency_ms,
+      t.cost_micros as candidate_cost_micros,
       j.status as judge_status, j.provider as judge_provider,
       j.model as judge_model, j.prompt_content_ref, j.response_content_ref,
       j.input_tokens as judge_input_tokens,
@@ -295,6 +297,7 @@ async function loadEvaluation(
     left join judge_calls j
       on j.evaluation_run_id = c.evaluation_run_id
       and j.evaluation_case_id = c.id
+    left join traces t on t.trace_id = c.candidate_trace_id
     where c.evaluation_run_id = $1
     order by c.case_id`,
     [evaluationId],
@@ -312,14 +315,31 @@ function summaryQuery(): string {
     r.id as dataset_revision_id, r.revision as dataset_revision,
     v.name as evaluator_name, v.version as evaluator_version,
     v.kind as evaluator_kind, e.trace_selector, e.status, e.total_cases,
+    e.trace_selector->>'appName' as candidate_app_name,
+    e.trace_selector->>'promptVersion' as candidate_prompt_version,
     e.scored_cases, e.passed_cases, e.failed_cases, e.missing_cases,
     e.unscorable_cases, e.errored_cases, e.average_score,
+    case_metrics.average_cost_micros, case_metrics.p50_latency_ms,
+    case_metrics.p95_latency_ms,
     e.requested_by_name, e.created_at, e.started_at, e.completed_at,
     e.last_error
   from evaluation_runs e
   join dataset_revisions r on r.id = e.dataset_revision_id
   join datasets d on d.id = r.dataset_id
   join evaluator_versions v on v.id = e.evaluator_version_id
+  left join lateral (
+    select
+      avg(t.cost_micros)::double precision as average_cost_micros,
+      percentile_cont(0.5) within group (
+        order by t.duration_ms::double precision
+      ) as p50_latency_ms,
+      percentile_cont(0.95) within group (
+        order by t.duration_ms::double precision
+      ) as p95_latency_ms
+    from evaluation_cases c
+    join traces t on t.trace_id = c.candidate_trace_id
+    where c.evaluation_run_id = e.id and c.status = 'completed'
+  ) case_metrics on true
   where ($1::uuid is null or e.id = $1)
   order by e.created_at desc, e.id desc`;
 }
@@ -359,6 +379,8 @@ interface EvaluationSummaryRow {
   evaluator_name: string;
   evaluator_version: number;
   evaluator_kind: EvaluatorDefinition["kind"];
+  candidate_app_name: string | null;
+  candidate_prompt_version: string | null;
   trace_selector: unknown;
   status: string;
   total_cases: number;
@@ -369,6 +391,9 @@ interface EvaluationSummaryRow {
   unscorable_cases: number;
   errored_cases: number;
   average_score: number | null;
+  average_cost_micros: number | null;
+  p50_latency_ms: number | null;
+  p95_latency_ms: number | null;
   requested_by_name: string;
   created_at: Date;
   started_at: Date | null;
@@ -386,6 +411,8 @@ interface EvaluationCaseRow {
   passed: boolean | null;
   reason: string | null;
   error: string | null;
+  candidate_latency_ms: string | null;
+  candidate_cost_micros: string | null;
   judge_status: "pending" | "completed" | "failed" | null;
   judge_provider: "deepseek" | null;
   judge_model: string | null;
@@ -406,6 +433,8 @@ function mapEvaluationSummary(row: EvaluationSummaryRow): EvaluationSummary {
     evaluatorName: row.evaluator_name,
     evaluatorVersion: row.evaluator_version,
     evaluatorKind: row.evaluator_kind,
+    candidateAppName: row.candidate_app_name,
+    candidatePromptVersion: row.candidate_prompt_version,
     status: normalizeEvaluationStatus(row.status),
     totalCases: row.total_cases,
     scoredCases: row.scored_cases,
@@ -416,6 +445,14 @@ function mapEvaluationSummary(row: EvaluationSummaryRow): EvaluationSummary {
     erroredCases: row.errored_cases,
     averageScore:
       row.average_score === null ? null : Number(row.average_score),
+    averageCostMicros:
+      row.average_cost_micros === null
+        ? null
+        : Number(row.average_cost_micros),
+    p50LatencyMs:
+      row.p50_latency_ms === null ? null : Number(row.p50_latency_ms),
+    p95LatencyMs:
+      row.p95_latency_ms === null ? null : Number(row.p95_latency_ms),
     requestedBy: row.requested_by_name,
     createdAt: row.created_at.toISOString(),
     startedAt: row.started_at?.toISOString() ?? null,
@@ -435,6 +472,14 @@ function mapEvaluationCase(row: EvaluationCaseRow): EvaluationCaseResult {
     passed: row.passed,
     reason: row.reason,
     error: row.error,
+    latencyMs:
+      row.candidate_latency_ms === null
+        ? null
+        : Number(row.candidate_latency_ms),
+    costMicros:
+      row.candidate_cost_micros === null
+        ? null
+        : Number(row.candidate_cost_micros),
     judgeCall:
       row.judge_status === null ||
       row.judge_provider === null ||

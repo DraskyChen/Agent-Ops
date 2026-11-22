@@ -632,7 +632,9 @@ a dataset revision and evaluator version, match candidate traces by
 worker before appending scores. The admin-enabled DeepSeek judge uses the same
 run model, requires explicit external-content consent, validates a fixed
 `score/pass/reason/category` response, and audits prompt/response objects and
-token usage.
+token usage. Two runs are comparable only when they use the same dataset
+revision and evaluator version; comparisons report quality, average cost, P95
+latency, and per-case deltas.
 
 `price_versions` is insert-only. For each LLM span, the worker selects the
 version matching provider, model, currency, pricing tier, and span start time,

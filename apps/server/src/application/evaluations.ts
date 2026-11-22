@@ -1,5 +1,6 @@
 import type {
   Environment,
+  EvaluationComparison,
   EvaluationCreateRequest,
   EvaluationDetail,
   EvaluationSummary,
@@ -43,6 +44,10 @@ export interface EvaluationService {
     input: EvaluationCreateRequest,
   ): Promise<EvaluationDetail>;
   cancel(evaluationId: string): Promise<EvaluationDetail | null>;
+  compare(
+    baselineId: string,
+    candidateId: string,
+  ): Promise<EvaluationComparison>;
 }
 
 export interface EvaluationServiceOptions {
@@ -75,6 +80,13 @@ export class EvaluationPermissionError extends Error {
   constructor(message: string) {
     super(message);
     this.name = "EvaluationPermissionError";
+  }
+}
+
+export class EvaluationComparisonError extends Error {
+  constructor(message: string) {
+    super(message);
+    this.name = "EvaluationComparisonError";
   }
 }
 
@@ -138,7 +150,121 @@ export function createEvaluationService(
       }
       return repository.cancel(evaluationId);
     },
+
+    async compare(baselineId, candidateId) {
+      if (
+        !UUID_PATTERN.test(baselineId) ||
+        !UUID_PATTERN.test(candidateId) ||
+        baselineId === candidateId
+      ) {
+        throw new EvaluationComparisonError(
+          "Two distinct valid evaluation IDs are required",
+        );
+      }
+      const [baseline, candidate] = await Promise.all([
+        repository.get(baselineId),
+        repository.get(candidateId),
+      ]);
+      if (baseline === null || candidate === null) {
+        throw new EvaluationNotFoundError();
+      }
+      if (
+        baseline.datasetRevisionId !== candidate.datasetRevisionId
+      ) {
+        throw new EvaluationComparisonError(
+          "Evaluations must use the same dataset revision",
+        );
+      }
+      if (
+        baseline.evaluatorName !== candidate.evaluatorName ||
+        baseline.evaluatorVersion !== candidate.evaluatorVersion
+      ) {
+        throw new EvaluationComparisonError(
+          "Evaluations must use the same evaluator version",
+        );
+      }
+      if (
+        baseline.status !== "completed" ||
+        candidate.status !== "completed"
+      ) {
+        throw new EvaluationComparisonError(
+          "Both evaluations must be completed before comparison",
+        );
+      }
+
+      const baselineCases = new Map(
+        baseline.cases.map((evaluationCase) => [
+          evaluationCase.caseId,
+          evaluationCase,
+        ]),
+      );
+      const candidateCases = new Map(
+        candidate.cases.map((evaluationCase) => [
+          evaluationCase.caseId,
+          evaluationCase,
+        ]),
+      );
+      const caseIds = [
+        ...new Set([...baselineCases.keys(), ...candidateCases.keys()]),
+      ].sort();
+      const cases = caseIds.map((caseId) => {
+        const baselineCase = baselineCases.get(caseId) ?? null;
+        const candidateCase = candidateCases.get(caseId) ?? null;
+        return {
+          caseId,
+          baseline: baselineCase,
+          candidate: candidateCase,
+          scoreDelta: delta(
+            baselineCase?.score ?? null,
+            candidateCase?.score ?? null,
+          ),
+          latencyDeltaMs: delta(
+            baselineCase?.latencyMs ?? null,
+            candidateCase?.latencyMs ?? null,
+          ),
+          costDeltaMicros: delta(
+            baselineCase?.costMicros ?? null,
+            candidateCase?.costMicros ?? null,
+          ),
+        };
+      });
+      return {
+        baseline: summaryOnly(baseline),
+        candidate: summaryOnly(candidate),
+        pairedCases: cases.filter(
+          (evaluationCase) =>
+            evaluationCase.baseline !== null &&
+            evaluationCase.candidate !== null,
+        ).length,
+        baselineOnlyCases: cases.filter(
+          (evaluationCase) =>
+            evaluationCase.baseline !== null &&
+            evaluationCase.candidate === null,
+        ).length,
+        candidateOnlyCases: cases.filter(
+          (evaluationCase) =>
+            evaluationCase.baseline === null &&
+            evaluationCase.candidate !== null,
+        ).length,
+        cases,
+      };
+    },
   };
+}
+
+function summaryOnly(evaluation: EvaluationDetail): EvaluationSummary {
+  const { traceSelector: _traceSelector, cases: _cases, ...summary } =
+    evaluation;
+  return summary;
+}
+
+function delta(
+  baseline: number | null,
+  candidate: number | null,
+): number | null {
+  return baseline === null || candidate === null
+    ? null
+    : candidate - baseline;
 }
 
 export function normalizeEvaluationCreate(

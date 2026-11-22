@@ -7,6 +7,7 @@ import type { FastifyInstance, FastifyReply } from "fastify";
 import type { HumanAuth } from "../../application/auth.js";
 import {
   EvaluationCaseAmbiguousError,
+  EvaluationComparisonError,
   EvaluationNotFoundError,
   EvaluationPermissionError,
   EvaluationValidationError,
@@ -94,6 +95,26 @@ export function registerEvaluationRoutes(
       }
     },
   );
+
+  app.get<{
+    Params: { baselineId: string; candidateId: string };
+  }>(
+    "/api/v1/evaluations/:baselineId/compare/:candidateId",
+    async (request, reply) => {
+      const principal = await requirePrincipal(humanAuth, request, reply);
+      if (principal === null) {
+        return;
+      }
+      try {
+        return await evaluations.compare(
+          request.params.baselineId,
+          request.params.candidateId,
+        );
+      } catch (error) {
+        return sendEvaluationError(reply, error);
+      }
+    },
+  );
 }
 
 function sendEvaluationError(reply: FastifyReply, error: unknown) {
@@ -112,6 +133,12 @@ function sendEvaluationError(reply: FastifyReply, error: unknown) {
   if (error instanceof EvaluationPermissionError) {
     return reply.code(403).send({
       code: "EVALUATION_PERMISSION_DENIED",
+      message: error.message,
+    } satisfies ApiErrorResponse);
+  }
+  if (error instanceof EvaluationComparisonError) {
+    return reply.code(400).send({
+      code: "EVALUATION_COMPARISON_INVALID",
       message: error.message,
     } satisfies ApiErrorResponse);
   }

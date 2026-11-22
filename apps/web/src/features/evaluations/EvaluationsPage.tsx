@@ -14,6 +14,7 @@ import { useEffect, useState } from "react";
 import type {
   DatasetDetail,
   DatasetSummary,
+  EvaluationComparison,
   EvaluationDetail,
   EvaluationStatus,
   EvaluationSummary,
@@ -26,6 +27,7 @@ import {
   cancelEvaluation,
   createEvaluation,
   fetchEvaluation,
+  fetchEvaluationComparison,
   fetchEvaluations,
 } from "./api.js";
 
@@ -54,6 +56,10 @@ export function EvaluationsPage({
   const [datasets, setDatasets] = useState<DatasetSummary[]>([]);
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [detail, setDetail] = useState<EvaluationDetail | null>(null);
+  const [baselineId, setBaselineId] = useState("");
+  const [candidateId, setCandidateId] = useState("");
+  const [comparison, setComparison] =
+    useState<EvaluationComparison | null>(null);
   const [datasetDetail, setDatasetDetail] = useState<DatasetDetail | null>(
     null,
   );
@@ -82,6 +88,19 @@ export function EvaluationsPage({
     try {
       const next = await fetchEvaluations();
       setEvaluations(next);
+      const completed = next.filter(
+        (evaluation) => evaluation.status === "completed",
+      );
+      setCandidateId((current) =>
+        completed.some((evaluation) => evaluation.evaluationId === current)
+          ? current
+          : completed[0]?.evaluationId ?? "",
+      );
+      setBaselineId((current) =>
+        completed.some((evaluation) => evaluation.evaluationId === current)
+          ? current
+          : completed[1]?.evaluationId ?? "",
+      );
       const nextSelected =
         preferredId ??
         (selectedId !== null &&
@@ -221,6 +240,22 @@ export function EvaluationsPage({
     }
   };
 
+  const compare = async () => {
+    if (baselineId === "" || candidateId === "") {
+      setError("Select two completed evaluation runs.");
+      return;
+    }
+    try {
+      setComparison(
+        await fetchEvaluationComparison(baselineId, candidateId),
+      );
+      setError(null);
+    } catch (compareError) {
+      setComparison(null);
+      setError(message(compareError, "Unable to compare evaluations"));
+    }
+  };
+
   return (
     <div className="page">
       <div className="page-heading">
@@ -269,6 +304,67 @@ export function EvaluationsPage({
           value={coverage(detail)}
           detail="matched and scored"
         />
+      </section>
+
+      <section className="comparison-panel">
+        <div className="comparison-controls">
+          <div>
+            <p className="eyebrow">Version comparison</p>
+            <strong>Compare two completed runs</strong>
+            <small>
+              Dataset revision and evaluator version must match.
+            </small>
+          </div>
+          <Field label="Baseline">
+            <select
+              value={baselineId}
+              onChange={(event) => setBaselineId(event.target.value)}
+            >
+              <option value="">Select baseline</option>
+              {evaluations
+                .filter((evaluation) => evaluation.status === "completed")
+                .map((evaluation) => (
+                  <option
+                    key={evaluation.evaluationId}
+                    value={evaluation.evaluationId}
+                  >
+                    {evaluation.candidatePromptVersion ?? "Any prompt"} ·{" "}
+                    {evaluation.evaluatorName}
+                  </option>
+                ))}
+            </select>
+          </Field>
+          <Field label="Candidate">
+            <select
+              value={candidateId}
+              onChange={(event) => setCandidateId(event.target.value)}
+            >
+              <option value="">Select candidate</option>
+              {evaluations
+                .filter((evaluation) => evaluation.status === "completed")
+                .map((evaluation) => (
+                  <option
+                    key={evaluation.evaluationId}
+                    value={evaluation.evaluationId}
+                  >
+                    {evaluation.candidatePromptVersion ?? "Any prompt"} ·{" "}
+                    {evaluation.evaluatorName}
+                  </option>
+                ))}
+            </select>
+          </Field>
+          <button
+            className="button primary compact"
+            type="button"
+            onClick={() => void compare()}
+            disabled={baselineId === "" || candidateId === ""}
+          >
+            Compare runs
+          </button>
+        </div>
+        {comparison === null ? null : (
+          <ComparisonResult comparison={comparison} />
+        )}
       </section>
 
       <section className="entity-layout">
@@ -683,6 +779,204 @@ function SummaryValue({
       <strong>{value}</strong>
     </div>
   );
+}
+
+function ComparisonResult({
+  comparison,
+}: {
+  comparison: EvaluationComparison;
+}) {
+  const baselineRate = passRate(comparison.baseline);
+  const candidateRate = passRate(comparison.candidate);
+  return (
+    <div className="comparison-result">
+      <div className="comparison-deltas">
+        <ComparisonDelta
+          label="Pass rate"
+          baseline={baselineRate}
+          candidate={candidateRate}
+          delta={candidateRate - baselineRate}
+          suffix=" pts"
+        />
+        <ComparisonDelta
+          label="Average score"
+          baseline={comparison.baseline.averageScore}
+          candidate={comparison.candidate.averageScore}
+          delta={difference(
+            comparison.baseline.averageScore,
+            comparison.candidate.averageScore,
+          )}
+        />
+        <ComparisonDelta
+          label="Average cost"
+          baseline={comparison.baseline.averageCostMicros}
+          candidate={comparison.candidate.averageCostMicros}
+          delta={difference(
+            comparison.baseline.averageCostMicros,
+            comparison.candidate.averageCostMicros,
+          )}
+          format="cost"
+        />
+        <ComparisonDelta
+          label="P95 latency"
+          baseline={comparison.baseline.p95LatencyMs}
+          candidate={comparison.candidate.p95LatencyMs}
+          delta={difference(
+            comparison.baseline.p95LatencyMs,
+            comparison.candidate.p95LatencyMs,
+          )}
+          format="duration"
+        />
+        <div>
+          <span>Paired cases</span>
+          <strong>{comparison.pairedCases}</strong>
+          <small>
+            {comparison.baselineOnlyCases} baseline only ·{" "}
+            {comparison.candidateOnlyCases} candidate only
+          </small>
+        </div>
+      </div>
+      <div className="comparison-cases">
+        <div className="comparison-case-heading">
+          <span>Case</span>
+          <span>Baseline</span>
+          <span>Candidate</span>
+          <span>Δ score</span>
+          <span>Δ latency</span>
+          <span>Δ cost</span>
+        </div>
+        {comparison.cases.map((evaluationCase) => (
+          <div className="comparison-case-row" key={evaluationCase.caseId}>
+            <strong>{evaluationCase.caseId}</strong>
+            <CaseScore result={evaluationCase.baseline} />
+            <CaseScore result={evaluationCase.candidate} />
+            <DeltaValue value={evaluationCase.scoreDelta} digits={2} />
+            <DeltaValue
+              value={evaluationCase.latencyDeltaMs}
+              suffix="ms"
+              digits={0}
+            />
+            <DeltaValue
+              value={evaluationCase.costDeltaMicros}
+              suffix="µ$"
+              digits={2}
+            />
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+function ComparisonDelta({
+  label,
+  baseline,
+  candidate,
+  delta,
+  suffix = "",
+  format,
+}: {
+  label: string;
+  baseline: number | null;
+  candidate: number | null;
+  delta: number | null;
+  suffix?: string;
+  format?: "cost" | "duration";
+}) {
+  return (
+    <div>
+      <span>{label}</span>
+      <strong>{formatDelta(delta, suffix, format)}</strong>
+      <small>
+        {formatMetric(baseline, format)} → {formatMetric(candidate, format)}
+      </small>
+    </div>
+  );
+}
+
+function CaseScore({
+  result,
+}: {
+  result: EvaluationComparison["cases"][number]["baseline"];
+}) {
+  return (
+    <span>
+      {result === null
+        ? "—"
+        : result.score === null
+          ? result.status
+          : result.score.toFixed(2)}
+    </span>
+  );
+}
+
+function DeltaValue({
+  value,
+  suffix = "",
+  digits,
+}: {
+  value: number | null;
+  suffix?: string;
+  digits: number;
+}) {
+  const tone =
+    value === null || value === 0 ? "" : value > 0 ? "positive" : "negative";
+  return (
+    <span className={`delta-value ${tone}`}>
+      {value === null
+        ? "—"
+        : `${value > 0 ? "+" : ""}${value.toFixed(digits)}${suffix}`}
+    </span>
+  );
+}
+
+function passRate(evaluation: EvaluationSummary): number {
+  return evaluation.scoredCases === 0
+    ? 0
+    : (evaluation.passedCases / evaluation.scoredCases) * 100;
+}
+
+function difference(
+  baseline: number | null,
+  candidate: number | null,
+): number | null {
+  return baseline === null || candidate === null
+    ? null
+    : candidate - baseline;
+}
+
+function formatDelta(
+  value: number | null,
+  suffix: string,
+  format?: "cost" | "duration",
+): string {
+  if (value === null) {
+    return "—";
+  }
+  const prefix = value > 0 ? "+" : "";
+  if (format === "cost") {
+    return `${prefix}$${(value / 1_000_000).toFixed(4)}`;
+  }
+  if (format === "duration") {
+    return `${prefix}${Math.round(value)}ms`;
+  }
+  return `${prefix}${value.toFixed(1)}${suffix}`;
+}
+
+function formatMetric(
+  value: number | null,
+  format?: "cost" | "duration",
+): string {
+  if (value === null) {
+    return "—";
+  }
+  if (format === "cost") {
+    return `$${(value / 1_000_000).toFixed(4)}`;
+  }
+  if (format === "duration") {
+    return `${Math.round(value)}ms`;
+  }
+  return value.toFixed(2);
 }
 
 function Field({

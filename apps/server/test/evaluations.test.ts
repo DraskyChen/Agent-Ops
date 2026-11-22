@@ -2,6 +2,7 @@ import { describe, expect, it, vi } from "vitest";
 
 import type { HumanPrincipal } from "../src/application/auth.js";
 import {
+  EvaluationComparisonError,
   EvaluationPermissionError,
   EvaluationValidationError,
   createEvaluationService,
@@ -161,6 +162,65 @@ describe("evaluation service", () => {
     );
     expect(create).toHaveBeenCalledTimes(1);
   });
+
+  it("compares paired cases from the same evaluator version", async () => {
+    const baseline = evaluationDetail({
+      evaluationId: "00000000-0000-4000-8000-000000000010",
+      status: "completed",
+      passedCases: 0,
+      scoredCases: 1,
+      averageScore: 0.25,
+      cases: [evaluationCase(0.25, false, 120, 100)],
+    });
+    const candidate = evaluationDetail({
+      evaluationId: "00000000-0000-4000-8000-000000000011",
+      status: "completed",
+      passedCases: 1,
+      scoredCases: 1,
+      averageScore: 0.9,
+      cases: [evaluationCase(0.9, true, 80, 70)],
+    });
+    const mismatched = evaluationDetail({
+      evaluationId: "00000000-0000-4000-8000-000000000012",
+      evaluatorVersion: 2,
+    });
+    const evaluations = createEvaluationService(
+      repository({
+        get: vi.fn(async (id: string) => {
+          if (id === baseline.evaluationId) {
+            return baseline;
+          }
+          return id === candidate.evaluationId ? candidate : mismatched;
+        }),
+      }),
+    );
+
+    const comparison = await evaluations.compare(
+      baseline.evaluationId,
+      candidate.evaluationId,
+    );
+
+    expect(comparison).toMatchObject({
+      pairedCases: 1,
+      baselineOnlyCases: 0,
+      candidateOnlyCases: 0,
+      cases: [
+        {
+          caseId: "case-1",
+          scoreDelta: 0.65,
+          latencyDeltaMs: -40,
+          costDeltaMicros: -30,
+        },
+      ],
+    });
+
+    await expect(
+      evaluations.compare(
+        baseline.evaluationId,
+        mismatched.evaluationId,
+      ),
+    ).rejects.toBeInstanceOf(EvaluationComparisonError);
+  });
 });
 
 function repository(
@@ -189,7 +249,16 @@ function judgeDefinition() {
   };
 }
 
-function evaluationDetail() {
+function evaluationDetail(
+  overrides: Partial<ReturnType<typeof baseEvaluationDetail>> = {},
+) {
+  return {
+    ...baseEvaluationDetail(),
+    ...overrides,
+  };
+}
+
+function baseEvaluationDetail() {
   return {
     evaluationId: "00000000-0000-4000-8000-000000000002",
     datasetId: "00000000-0000-4000-8000-000000000003",
@@ -199,7 +268,14 @@ function evaluationDetail() {
     evaluatorName: "exact",
     evaluatorVersion: 1,
     evaluatorKind: "exact" as const,
-    status: "queued" as const,
+    candidateAppName: "refund-agent" as string | null,
+    candidatePromptVersion: "refund-v2" as string | null,
+    status: "queued" as
+      | "queued"
+      | "running"
+      | "completed"
+      | "failed"
+      | "cancelled",
     totalCases: 1,
     scoredCases: 0,
     passedCases: 0,
@@ -207,13 +283,38 @@ function evaluationDetail() {
     missingCases: 0,
     unscorableCases: 0,
     erroredCases: 0,
-    averageScore: null,
+    averageScore: null as number | null,
+    averageCostMicros: null as number | null,
+    p50LatencyMs: null as number | null,
+    p95LatencyMs: null as number | null,
     requestedBy: "Reviewer One",
     createdAt: "2026-11-22T13:00:00.000Z",
-    startedAt: null,
-    completedAt: null,
-    lastError: null,
+    startedAt: null as string | null,
+    completedAt: null as string | null,
+    lastError: null as string | null,
     traceSelector: {},
-    cases: [],
+    cases: [] as ReturnType<typeof evaluationCase>[],
+  };
+}
+
+function evaluationCase(
+  score: number,
+  passed: boolean,
+  latencyMs: number,
+  costMicros: number,
+) {
+  return {
+    evaluationCaseId: "case-result-1",
+    datasetItemId: "item-1",
+    caseId: "case-1",
+    candidateTraceId: "trace-1",
+    status: "completed" as const,
+    score,
+    passed,
+    reason: "result",
+    error: null,
+    judgeCall: null,
+    latencyMs,
+    costMicros,
   };
 }
