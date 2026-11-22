@@ -59,11 +59,15 @@ Implemented:
   content consent, prompt/response auditing, token usage, and validation retry.
 - Two-run comparison over the same dataset revision and evaluator version,
   including pass rate, score, cost, P95 latency, and per-case deltas.
+- A single-team production Compose file, multi-stage application image, Nginx
+  reverse proxy, and automatic migration service. Image build verification
+  still requires Docker Hub connectivity.
 - Independent PostgreSQL and MinIO development stack.
 
 Not implemented yet:
 
-- Single-team container release and production capacity validation.
+- Container build/startup verification, production capacity validation,
+  backup/restore, and release acceptance.
 
 ## Local development
 
@@ -110,6 +114,29 @@ Run the platform:
 ```bash
 pnpm dev
 ```
+
+## Single-team container release
+
+```bash
+cp .env.production.example .env.production
+```
+
+The production configuration uses OIDC and requires
+`AGENT_OPS_INGEST_TOKEN`, PostgreSQL credentials, and object-store
+credentials. Only the Web entry point is exposed by default; SDKs should use
+`https://<host>/v1/traces`.
+
+```bash
+pnpm release:config
+pnpm release:build
+pnpm release:up
+docker compose --env-file .env.production \
+  -f infra/docker-compose/compose.production.yaml ps
+```
+
+The `migrate` service runs before Server and Worker. Web listens on
+`http://127.0.0.1:8080` by default, and the MinIO console is bound to local
+port `9001`.
 
 Local development defaults to `AGENT_OPS_AUTH_MODE=dev`. OIDC mode requires
 the `OIDC_*` values documented in `.env.example`; the server refuses to start in

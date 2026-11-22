@@ -54,11 +54,13 @@ TypeScript 或 Python Agent
   Prompt/响应审计、Token 用量和失败重试。
 - 同一数据集修订、同一评测器版本的双运行对比，展示通过率、平均分、
   成本、P95 延迟和逐用例差值。
+- 单团队生产 Compose、多阶段应用镜像、Nginx 反向代理和自动迁移服务；
+  镜像实际构建仍需可访问 Docker Hub 的环境。
 - 独立的 PostgreSQL 和 MinIO 开发环境。
 
 尚未完成：
 
-- 单团队容器化发布和上线容量验收。
+- 容器构建与启动验收、容量压测、备份恢复和正式上线验收。
 
 ## 本地开发
 
@@ -103,6 +105,29 @@ uv run --project packages/sdk-python mypy packages/sdk-python/src/agent_ops
 ```bash
 pnpm dev
 ```
+
+## 单团队容器发布
+
+复制并填写生产配置：
+
+```bash
+cp .env.production.example .env.production
+```
+
+生产配置使用 OIDC，必须设置 `AGENT_OPS_INGEST_TOKEN`、PostgreSQL 和
+对象存储密钥。默认只暴露 Web 入口；SDK 应使用该入口下的
+`https://<host>/v1/traces`。
+
+```bash
+pnpm release:config
+pnpm release:build
+pnpm release:up
+docker compose --env-file .env.production \
+  -f infra/docker-compose/compose.production.yaml ps
+```
+
+`migrate` 服务在 Server 和 Worker 启动前运行。Web 默认监听
+`http://127.0.0.1:8080`，MinIO 管理端只绑定本机 `9001`。
 
 本地默认使用 `AGENT_OPS_AUTH_MODE=dev`。OIDC 模式需要
 `.env.example` 中的 `OIDC_*` 配置；生产环境使用开发身份模式时服务端会拒绝启动。
