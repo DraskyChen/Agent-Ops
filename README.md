@@ -64,12 +64,14 @@ Implemented:
   still requires Docker Hub connectivity.
 - A recorded one-day, one-million-span database baseline for trace persistence,
   list/search/detail latency, and storage.
+- SHA-256-checked PostgreSQL/MinIO backups, an explicitly confirmed full-restore
+  script, and a real development-stack restore drill.
 - Independent PostgreSQL and MinIO development stack.
 
 Not implemented yet:
 
-- Container build/startup verification, warmed 30-day/concurrent OTLP capacity
-  validation, backup/restore, and release acceptance.
+- Container build/startup verification, warmed 30-day/concurrent OTLP capacity,
+  production RPO/RTO and offsite backup acceptance, and release acceptance.
 
 ## Local development
 
@@ -107,6 +109,17 @@ explicit override.
 database with one million spans by default and measure trace persistence,
 list/search/detail queries, and storage. Capacity test rows are automatically
 removed. See [the capacity baseline](docs/capacity.md) for results and limits.
+
+Backup and restore commands:
+
+```bash
+pnpm backup
+CONFIRM_RESTORE=yes pnpm restore /path/to/agent-ops-snapshot
+```
+
+Restore stops the application and fully replaces the database and object
+bucket. See [the backup/restore drill](docs/backup-restore.md) for results and
+production requirements.
 
 Python SDK:
 

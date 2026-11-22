@@ -57,11 +57,14 @@ TypeScript 或 Python Agent
 - 单团队生产 Compose、多阶段应用镜像、Nginx 反向代理和自动迁移服务；
   镜像实际构建仍需可访问 Docker Hub 的环境。
 - 独立数据库中的每天 100 万 Span 写入、列表、宽泛搜索、详情和存储基线。
+- 带 SHA-256 完整性校验的 PostgreSQL/MinIO 备份脚本、显式确认的完整恢复
+  脚本，以及开发环境真实恢复演练。
 - 独立的 PostgreSQL 和 MinIO 开发环境。
 
 尚未完成：
 
-- 容器构建与启动验收、30 天热数据/OTLP 并发压测、备份恢复和正式上线验收。
+- 容器构建与启动验收、30 天热数据/OTLP 并发压测、正式环境 RPO/RTO
+  与异地备份验收、正式上线验收。
 
 ## 本地开发
 
@@ -96,6 +99,16 @@ ISO 时间限制回填范围。
 `pnpm capacity:test` 使用 `CAPACITY_TEST_DATABASE_URL` 对一次性数据库执行
 Trace/Span 写入、列表、宽泛搜索和详情查询压测。默认目标为 100 万 Span，
 测试数据会自动清理；结果与限制见 [容量基线](docs/capacity.md)。
+
+备份与恢复命令：
+
+```bash
+pnpm backup
+CONFIRM_RESTORE=yes pnpm restore /path/to/agent-ops-snapshot
+```
+
+恢复会停止应用并完整替换数据库和对象 Bucket。演练结果与生产要求见
+[备份恢复演练](docs/backup-restore.md)。
 
 Python SDK：
 

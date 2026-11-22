@@ -25,6 +25,8 @@
     "release:config": "docker compose --env-file .env.production -f infra/docker-compose/compose.production.yaml config",
     "release:up": "docker compose --env-file .env.production -f infra/docker-compose/compose.production.yaml up -d",
     "release:down": "docker compose --env-file .env.production -f infra/docker-compose/compose.production.yaml down",
+    "backup": "sh infra/backup/backup.sh",
+    "restore": "sh infra/backup/restore.sh",
     "metrics:backfill": "pnpm --filter @agent-ops/worker metrics:backfill",
     "metrics:load-test": "pnpm --filter @agent-ops/worker metrics:load-test",
     "format:check": "pnpm -r --if-present format:check",
