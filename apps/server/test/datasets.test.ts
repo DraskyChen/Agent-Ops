@@ -267,6 +267,7 @@ function repository(
   return {
     list: async () => [],
     get: async () => datasetDetail(),
+    getRevision: async () => null,
     create: async () => datasetSummary(),
     loadTraceSnapshots: async () => [],
     createRevision: async () => {

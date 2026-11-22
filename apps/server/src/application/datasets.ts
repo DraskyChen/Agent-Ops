@@ -63,6 +63,10 @@ export interface NormalizedDatasetRevision {
 export interface DatasetRepository {
   list(): Promise<DatasetSummary[]>;
   get(datasetId: string): Promise<DatasetDetail | null>;
+  getRevision(
+    datasetId: string,
+    revisionId: string,
+  ): Promise<DatasetRevisionDetail | null>;
   create(
     principal: HumanPrincipal,
     input: NormalizedDatasetCreate,
@@ -78,6 +82,10 @@ export interface DatasetRepository {
 export interface DatasetService {
   list(): Promise<DatasetSummary[]>;
   get(datasetId: string): Promise<DatasetDetail | null>;
+  getRevision(
+    datasetId: string,
+    revisionId: string,
+  ): Promise<DatasetRevisionDetail | null>;
   create(
     principal: HumanPrincipal,
     input: DatasetCreateRequest,
@@ -150,6 +158,13 @@ export function createDatasetService(
         return Promise.resolve(null);
       }
       return repository.get(datasetId);
+    },
+
+    getRevision(datasetId, revisionId) {
+      if (!UUID_PATTERN.test(datasetId) || !UUID_PATTERN.test(revisionId)) {
+        return Promise.resolve(null);
+      }
+      return repository.getRevision(datasetId, revisionId);
     },
 
     create(principal, input) {

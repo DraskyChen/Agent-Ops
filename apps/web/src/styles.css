@@ -2120,6 +2120,398 @@ tbody tr:last-child td {
   font-size: 9px;
 }
 
+.evaluation-kpis {
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+}
+
+.entity-layout {
+  display: grid;
+  grid-template-columns: minmax(280px, 340px) minmax(0, 1fr);
+  overflow: hidden;
+  border: 1px solid var(--border);
+  border-radius: 9px;
+  background: var(--surface);
+  box-shadow: var(--shadow-sm);
+}
+
+.entity-sidebar {
+  min-width: 0;
+  border-right: 1px solid var(--border);
+  background: color-mix(in srgb, var(--surface) 92%, var(--surface-muted));
+}
+
+.entity-sidebar > .panel-heading {
+  padding: 15px;
+}
+
+.entity-list {
+  display: grid;
+  max-height: 310px;
+  overflow-y: auto;
+  border-top: 1px solid var(--border);
+  border-bottom: 1px solid var(--border);
+}
+
+.entity-list-item {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  min-width: 0;
+  padding: 12px 15px;
+  border: 0;
+  border-bottom: 1px solid var(--border);
+  background: transparent;
+  color: var(--text-secondary);
+  text-align: left;
+  cursor: pointer;
+}
+
+.entity-list-item:last-child {
+  border-bottom: 0;
+}
+
+.entity-list-item:hover,
+.entity-list-item.active {
+  background: var(--surface);
+}
+
+.entity-list-item.active {
+  box-shadow: inset 2px 0 0 var(--accent);
+}
+
+.entity-list-item > span {
+  display: grid;
+  min-width: 0;
+  gap: 3px;
+}
+
+.entity-list-item strong {
+  overflow: hidden;
+  color: var(--text);
+  font-size: 11px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.entity-list-item small {
+  overflow: hidden;
+  color: var(--text-muted);
+  font-size: 9px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.entity-main {
+  min-width: 0;
+}
+
+.entity-empty {
+  display: grid;
+  min-height: 360px;
+  color: var(--text-muted);
+  place-content: center;
+  justify-items: center;
+  gap: 7px;
+  text-align: center;
+}
+
+.entity-empty svg {
+  margin-bottom: 4px;
+  color: var(--accent);
+}
+
+.entity-empty strong {
+  color: var(--text);
+  font-size: 13px;
+}
+
+.entity-empty span {
+  font-size: 10px;
+}
+
+.entity-header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 18px;
+  padding: 18px;
+  border-bottom: 1px solid var(--border);
+}
+
+.entity-header h2 {
+  margin: 3px 0;
+  font-size: 21px;
+  letter-spacing: -0.025em;
+}
+
+.entity-header p:last-child {
+  margin: 0;
+  color: var(--text-muted);
+  font-size: 10px;
+}
+
+.entity-form {
+  display: grid;
+  gap: 12px;
+  padding: 16px;
+  border-top: 1px solid var(--border);
+}
+
+.compact-form {
+  border-top: 1px solid var(--border);
+}
+
+.form-heading {
+  display: grid;
+  gap: 2px;
+}
+
+.form-heading strong {
+  color: var(--text);
+  font-size: 11px;
+}
+
+.form-heading small {
+  color: var(--text-muted);
+  font-size: 9px;
+}
+
+.entity-field {
+  display: grid;
+  min-width: 0;
+  gap: 5px;
+}
+
+.entity-field > span {
+  color: var(--text-muted);
+  font-size: 8px;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.entity-field input,
+.entity-field select,
+.entity-field textarea {
+  width: 100%;
+  min-width: 0;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  outline: 0;
+  background: var(--surface);
+  color: var(--text-secondary);
+  font: inherit;
+  font-size: 10px;
+}
+
+.entity-field input,
+.entity-field select {
+  height: 35px;
+  padding: 0 9px;
+}
+
+.entity-field textarea {
+  padding: 8px 9px;
+  line-height: 1.5;
+  resize: vertical;
+}
+
+.entity-field input:focus,
+.entity-field select:focus,
+.entity-field textarea:focus {
+  border-color: var(--accent);
+  box-shadow: 0 0 0 2px var(--accent-soft);
+}
+
+.entity-form-row {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 9px;
+}
+
+.revision-items {
+  display: grid;
+  gap: 10px;
+}
+
+.revision-item {
+  padding: 11px;
+  border: 1px solid var(--border);
+  border-radius: 7px;
+  background: var(--surface-muted);
+}
+
+.revision-item-heading,
+.form-actions {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+}
+
+.revision-item-heading {
+  margin-bottom: 9px;
+}
+
+.revision-item-heading strong {
+  font-size: 9px;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+
+.revision-item-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 9px;
+}
+
+.form-actions {
+  align-items: flex-end;
+}
+
+.entity-table {
+  border-top: 1px solid var(--border);
+}
+
+.entity-table > .panel-heading {
+  padding: 14px 18px;
+}
+
+.entity-table > .empty-copy {
+  padding: 18px;
+}
+
+.case-list {
+  display: grid;
+  border-top: 1px solid var(--border);
+}
+
+.case-list article {
+  display: grid;
+  grid-template-columns: minmax(150px, 0.9fr) minmax(150px, 1.1fr) auto;
+  align-items: center;
+  gap: 12px;
+  padding: 12px 18px;
+  border-bottom: 1px solid var(--border);
+}
+
+.case-list article:last-child {
+  border-bottom: 0;
+}
+
+.case-list article > div {
+  display: grid;
+  min-width: 0;
+  gap: 2px;
+}
+
+.case-list strong {
+  font-size: 10px;
+}
+
+.case-list small,
+.case-list span {
+  overflow: hidden;
+  color: var(--text-muted);
+  font-size: 9px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.case-list code {
+  overflow: hidden;
+  color: var(--text-secondary);
+  font-size: 9px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.evaluation-case-list article {
+  grid-template-columns: minmax(150px, 0.8fr) auto minmax(180px, 1.3fr) 48px;
+}
+
+.evaluation-case-list article > strong:last-child {
+  text-align: right;
+}
+
+.evaluation-status {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 22px;
+  padding: 0 7px;
+  border-radius: 999px;
+  background: var(--surface-muted);
+  color: var(--text-muted);
+  font-size: 8px;
+  font-weight: 700;
+  text-transform: capitalize;
+  white-space: nowrap;
+}
+
+.evaluation-status.completed {
+  background: var(--success-soft);
+  color: var(--success);
+}
+
+.evaluation-status.running,
+.evaluation-status.queued,
+.evaluation-status.pending {
+  background: var(--accent-soft);
+  color: var(--accent-text);
+}
+
+.evaluation-status.failed,
+.evaluation-status.missing,
+.evaluation-status.unscorable {
+  background: var(--danger-soft, #fbe9e7);
+  color: var(--danger, #a6372b);
+}
+
+.evaluation-summary-grid {
+  display: grid;
+  grid-template-columns: repeat(5, minmax(0, 1fr));
+  border-bottom: 1px solid var(--border);
+}
+
+.evaluation-summary-grid > div {
+  display: grid;
+  gap: 4px;
+  padding: 15px 18px;
+}
+
+.evaluation-summary-grid > div + div {
+  border-left: 1px solid var(--border);
+}
+
+.evaluation-summary-grid span {
+  color: var(--text-muted);
+  font-size: 8px;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.evaluation-summary-grid strong {
+  font-size: 16px;
+}
+
+.evaluation-progress {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 12px 18px;
+  border-bottom: 1px solid var(--border);
+  background: var(--accent-soft);
+  color: var(--accent-text);
+  font-size: 10px;
+}
+
+.evaluation-progress .button {
+  margin-left: auto;
+}
+
 @media (max-width: 1080px) {
   .landing-main {
     grid-template-columns: 1fr;
@@ -2141,6 +2533,10 @@ tbody tr:last-child td {
 
   .trace-inspector {
     grid-template-columns: minmax(300px, 46%) minmax(0, 54%);
+  }
+
+  .entity-layout {
+    grid-template-columns: minmax(260px, 300px) minmax(0, 1fr);
   }
 }
 
@@ -2251,8 +2647,22 @@ tbody tr:last-child td {
 
   .review-panel,
   .operations-grid,
-  .dashboard-chart-grid {
+  .dashboard-chart-grid,
+  .entity-layout {
     grid-template-columns: 1fr;
+  }
+
+  .entity-sidebar {
+    border-right: 0;
+    border-bottom: 1px solid var(--border);
+  }
+
+  .entity-list {
+    max-height: 240px;
+  }
+
+  .evaluation-summary-grid {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
   }
 
   .review-panel-main {
@@ -2325,8 +2735,27 @@ tbody tr:last-child td {
 
   .advanced-filter-grid,
   .review-form,
-  .dashboard-filters {
+  .dashboard-filters,
+  .revision-item-grid {
     grid-template-columns: 1fr;
+  }
+
+  .evaluation-summary-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .evaluation-summary-grid > div + div {
+    border-left: 0;
+  }
+
+  .evaluation-case-list article,
+  .case-list article {
+    grid-template-columns: 1fr auto;
+  }
+
+  .evaluation-case-list article > span,
+  .case-list article > code {
+    grid-column: 1 / -1;
   }
 }
 

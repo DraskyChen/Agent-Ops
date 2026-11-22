@@ -69,6 +69,29 @@ export function registerDatasetRoutes(
     },
   );
 
+  app.get<{
+    Params: { datasetId: string; revisionId: string };
+  }>(
+    "/api/v1/datasets/:datasetId/revisions/:revisionId",
+    async (request, reply) => {
+      const principal = await requirePrincipal(humanAuth, request, reply);
+      if (principal === null) {
+        return;
+      }
+      const revision = await datasets.getRevision(
+        request.params.datasetId,
+        request.params.revisionId,
+      );
+      if (revision === null) {
+        return reply.code(404).send({
+          code: "DATASET_REVISION_NOT_FOUND",
+          message: "Dataset revision not found",
+        } satisfies ApiErrorResponse);
+      }
+      return revision;
+    },
+  );
+
   app.post<{
     Params: { datasetId: string };
     Body: DatasetRevisionCreateRequest;

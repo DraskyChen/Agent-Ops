@@ -88,6 +88,38 @@ export function createPostgresDatasetRepository(pool: Pool): DatasetRepository {
       };
     },
 
+    async getRevision(datasetId, revisionId) {
+      const revisionResult = await pool.query<DatasetRevisionRow>(
+        `select
+          r.id as revision_id, r.dataset_id, r.revision, r.note,
+          r.created_by_name, r.created_at,
+          (select count(*) from dataset_items i
+           where i.dataset_revision_id = r.id)::integer as item_count
+        from dataset_revisions r
+        where r.dataset_id = $1 and r.id = $2`,
+        [datasetId, revisionId],
+      );
+      const revision = revisionResult.rows[0];
+      if (revision === undefined) {
+        return null;
+      }
+      const items = await pool.query<DatasetItemRow>(
+        `select
+          id as item_id, case_id, source_trace_id, app_name,
+          prompt_version, task_type, model, environment, run_status,
+          source_started_at, input_content_ref, baseline_output_content_ref,
+          expected_output_content_ref, expected_behavior, tags
+        from dataset_items
+        where dataset_revision_id = $1
+        order by case_id`,
+        [revisionId],
+      );
+      return {
+        ...mapRevisionSummary(revision),
+        items: items.rows.map(mapDatasetItem),
+      };
+    },
+
     async create(principal, input) {
       try {
         const result = await pool.query<DatasetSummaryRow>(

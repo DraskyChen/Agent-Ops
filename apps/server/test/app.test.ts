@@ -311,6 +311,7 @@ function testDependencies(
     datasets: {
       list: async () => [],
       get: async () => null,
+      getRevision: async () => null,
       create: async () => {
         throw new Error("not configured");
       },

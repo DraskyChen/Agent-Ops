@@ -406,6 +406,21 @@ describe.skipIf(!enabled)("operational review integration", () => {
       );
     }
 
+    const revisionDetail = await app.inject({
+      method: "GET",
+      url: `/api/v1/datasets/${datasetId}/revisions/${revisionBody.revisionId}`,
+    });
+    expect(revisionDetail.statusCode).toBe(200);
+    expect(revisionDetail.json()).toMatchObject({
+      revision: 1,
+      items: [
+        {
+          caseId: "refund-case-integration",
+          sourceTraceId: datasetTraceId,
+        },
+      ],
+    });
+
     const dataset = await app.inject({
       method: "GET",
       url: `/api/v1/datasets/${datasetId}`,
