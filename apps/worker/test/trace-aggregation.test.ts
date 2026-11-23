@@ -18,6 +18,7 @@ describe("trace aggregation", () => {
             "agent.run.status": "success",
             "agent.task.type": "support",
             "agent.session.id": "session-1",
+            "agent.eval.case_id": "support-case-1",
           },
         }),
         span({
@@ -52,6 +53,7 @@ describe("trace aggregation", () => {
       runName: "support-agent",
       model: "test-model",
       runStatus: "success",
+      evalCaseId: "support-case-1",
       stepCount: 2,
       llmCallCount: 1,
       toolCallCount: 1,

@@ -6,6 +6,7 @@ describe("server auth configuration", () => {
   it("defaults local development to the explicit dev identity", () => {
     const config = loadServerConfig({});
     expect(config.auth.mode).toBe("dev");
+    expect(config.evaluationJudgeEnabled).toBe(false);
     if (config.auth.mode === "dev") {
       expect(config.auth.dev.role).toBe("admin");
     }

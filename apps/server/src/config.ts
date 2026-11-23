@@ -29,6 +29,7 @@ export interface ServerConfig {
   database: PoolConfig;
   ingestToken?: string;
   traceMaxLatenessHours: number;
+  evaluationJudgeEnabled: boolean;
   auth:
     | {
         mode: "dev";
@@ -48,6 +49,7 @@ export interface ServerConfig {
     secretKey: string;
     maxBytes: number;
     retentionDays: number;
+    datasetRetentionDays: number;
   };
 }
 
@@ -76,6 +78,17 @@ export function loadServerConfig(
   );
   if (!Number.isInteger(contentRetentionDays) || contentRetentionDays <= 0) {
     throw new Error("S3_CONTENT_RETENTION_DAYS must be a positive integer");
+  }
+  const datasetContentRetentionDays = Number(
+    environment.DATASET_CONTENT_RETENTION_DAYS ?? "180",
+  );
+  if (
+    !Number.isInteger(datasetContentRetentionDays) ||
+    datasetContentRetentionDays <= 0
+  ) {
+    throw new Error(
+      "DATASET_CONTENT_RETENTION_DAYS must be a positive integer",
+    );
   }
 
   const sessionTtlHours = positiveInteger(
@@ -107,6 +120,8 @@ export function loadServerConfig(
       ? {}
       : { ingestToken: environment.AGENT_OPS_INGEST_TOKEN }),
     traceMaxLatenessHours,
+    evaluationJudgeEnabled:
+      environment.EVALUATION_JUDGE_ENABLED === "true",
     auth:
       authMode === "dev"
         ? {
@@ -155,6 +170,7 @@ export function loadServerConfig(
       secretKey: environment.S3_SECRET_KEY ?? "agent_ops_dev_secret",
       maxBytes: contentMaxBytes,
       retentionDays: contentRetentionDays,
+      datasetRetentionDays: datasetContentRetentionDays,
     },
   };
 }

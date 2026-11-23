@@ -1,6 +1,7 @@
 import { randomUUID } from "node:crypto";
 
 import { metricBucketStart } from "@agent-ops/metrics";
+import type { DatasetRevisionDetail } from "@agent-ops/contracts";
 import type { FastifyInstance } from "fastify";
 import type { Pool } from "pg";
 import {
@@ -14,13 +15,28 @@ import {
 import { buildApp } from "../src/app.js";
 import { createServerDependencies } from "../src/composition.js";
 import { createPool } from "../src/db/pool.js";
+import { createEvaluationWorker } from "../../worker/src/application/evaluate-rule-run.js";
+import { createPostgresEvaluationWorkerStore } from "../../worker/src/infrastructure/postgres/evaluation-worker-store.js";
+import { createObjectTextReader } from "../../worker/src/infrastructure/minio/object-reader.js";
+import { createObjectTextWriter } from "../../worker/src/infrastructure/minio/object-writer.js";
+import { createMinioContentStore } from "../src/infrastructure/minio/content-store.js";
 import { createPostgresMetricsRollupStore } from "../../worker/src/infrastructure/postgres/metrics-rollup-store.js";
 
 const enabled = process.env.AGENT_OPS_INTEGRATION === "1";
 
 describe.skipIf(!enabled)("operational review integration", () => {
   const traceId = `trace-integration-${randomUUID()}`;
+  const datasetTraceId = `trace-dataset-${randomUUID()}`;
+  const candidateTraceId = `trace-candidate-${randomUUID()}`;
   const contentId = randomUUID();
+  const datasetContentIds: string[] = [];
+  let datasetInputContentId: string | undefined;
+  let datasetOutputContentId: string | undefined;
+  let candidateOutputContentId: string | undefined;
+  let datasetId: string | undefined;
+  let evaluationId: string | undefined;
+  let baselineEvaluationId: string | undefined;
+  let judgeEvaluationId: string | undefined;
   let metricBucket: Date;
   let app: FastifyInstance;
   let pool: Pool;
@@ -65,6 +81,7 @@ describe.skipIf(!enabled)("operational review integration", () => {
       pool,
       ingestToken: "integration-secret",
       traceMaxLatenessHours: 24,
+      evaluationJudgeEnabled: true,
       auth: {
         mode: "dev",
         sessionTtlHours: 8,
@@ -83,22 +100,141 @@ describe.skipIf(!enabled)("operational review integration", () => {
         secretKey: "agent_ops_dev_secret",
         maxBytes: 2 * 1024 * 1024,
         retentionDays: 30,
+        datasetRetentionDays: 180,
       },
     });
     app = buildApp({ dependencies });
+
+    for (const [contentKind, content] of [
+      ["agent_input", "integration prompt"],
+      ["agent_output", "integration answer"],
+    ] as const) {
+      const uploaded = await app.inject({
+        method: "POST",
+        url: "/api/v1/content",
+        headers: { authorization: "Bearer integration-secret" },
+        payload: {
+          ownerApp: "integration-app",
+          contentKind,
+          mediaType: "text/plain",
+          captureMode: "full",
+          redactionRuleVersion: "v1",
+          content,
+        },
+      });
+      expect(uploaded.statusCode).toBe(201);
+      datasetContentIds.push(
+        (uploaded.json() as { contentId: string }).contentId,
+      );
+    }
+    [datasetInputContentId, datasetOutputContentId] = datasetContentIds;
+    await pool.query(
+      `insert into traces (
+        trace_id, root_span_id, app_name, run_name, service_name,
+        service_version, environment, task_type, prompt_version, eval_case_id,
+        model, run_status, first_span_at, last_span_at, start_time, end_time,
+        duration_ms, step_count, tool_error_count, input_tokens, output_tokens,
+        cost_micros, currency, completeness, ingest_state, sealed_at
+      ) values (
+        $1, 'dataset-root', 'integration-app', 'dataset baseline', 'worker',
+        '1.2.3', 'test', 'refund', 'prompt-v1', 'refund-case-integration',
+        'deepseek-flash', 'success', now(), now(), now(), now(), 100, 0, 0,
+        10, 5, 100, 'USD', 'complete', 'sealed_complete', now()
+      )`,
+      [datasetTraceId],
+    );
+    await pool.query(
+      `insert into spans (
+        trace_id, span_id, service_name, service_version, environment,
+        span_type, name, start_time, end_time, duration_ms, status,
+        resource_attributes, attributes, input_content_ref,
+        output_content_ref, content_recorded, schema_version
+      ) values (
+        $1, 'dataset-root', 'worker', '1.2.3', 'test', 'agent.run',
+        'refund-agent', now(), now(), 100, 'OK', '{}'::jsonb, '{}'::jsonb,
+        $2, $3, 'full', '0.1'
+      )`,
+      [datasetTraceId, datasetInputContentId, datasetOutputContentId],
+    );
   });
 
   afterAll(async () => {
     await app?.close();
     if (pool !== undefined) {
+      const cleanupObjectKeys: string[] = [];
       await pool.query("delete from feedback where trace_id = $1", [traceId]);
       await pool.query("delete from traces where trace_id = $1", [traceId]);
+      const evaluationIds = [
+        evaluationId,
+        baselineEvaluationId,
+        judgeEvaluationId,
+      ].filter(
+        (id): id is string => id !== undefined,
+      );
+      for (const id of evaluationIds) {
+        await pool.query("delete from evaluation_runs where id = $1", [id]);
+      }
+      if (evaluationIds.length > 0) {
+        await pool.query(
+          "delete from evaluator_versions where name like '%integration-%'",
+        );
+      }
+      if (datasetId !== undefined) {
+        const copied = await pool.query<{ object_key: string }>(
+          "select object_key from content_objects where owner_app = $1",
+          ["agent-ops-datasets"],
+        );
+        cleanupObjectKeys.push(...copied.rows.map((row) => row.object_key));
+        await pool.query("delete from datasets where id = $1", [datasetId]);
+        await pool.query(
+          "delete from content_objects where owner_app = $1",
+          ["agent-ops-datasets"],
+        );
+      }
+      const judgeContent = await pool.query<{ object_key: string }>(
+        "select object_key from content_objects where owner_app = $1",
+        ["agent-ops-evaluation"],
+      );
+      cleanupObjectKeys.push(
+        ...judgeContent.rows.map((row) => row.object_key),
+      );
+      await pool.query(
+        "delete from content_objects where owner_app = $1",
+        ["agent-ops-evaluation"],
+      );
+      const sourceContent = await pool.query<{ object_key: string }>(
+        "select object_key from content_objects where content_id = any($1::uuid[])",
+        [datasetContentIds],
+      );
+      await pool.query("delete from traces where trace_id = $1", [
+        datasetTraceId,
+      ]);
+      await pool.query("delete from traces where trace_id = $1", [
+        candidateTraceId,
+      ]);
       await pool.query("delete from content_access_log where content_id = $1", [
         contentId,
       ]);
       await pool.query("delete from content_objects where content_id = $1", [
         contentId,
       ]);
+      await pool.query(
+        "delete from content_objects where content_id = any($1::uuid[])",
+        [datasetContentIds],
+      );
+      const blobs = createMinioContentStore({
+        endpoint: "http://127.0.0.1:9000",
+        region: "us-east-1",
+        bucket: "agent-ops-content",
+        accessKey: "agent_ops",
+        secretKey: "agent_ops_dev_secret",
+      });
+      for (const row of sourceContent.rows) {
+        cleanupObjectKeys.push(row.object_key);
+      }
+      for (const objectKey of cleanupObjectKeys) {
+        await blobs.delete(objectKey).catch(() => undefined);
+      }
       await pool.query(
         `delete from trace_metrics_hourly
          where bucket_start = $1 and app_name = 'integration-app'`,
@@ -230,5 +366,367 @@ describe.skipIf(!enabled)("operational review integration", () => {
       [contentId],
     );
     expect(audit.rows[0]).toEqual({ decision: "expired" });
+
+    const createdDataset = await app.inject({
+      method: "POST",
+      url: "/api/v1/datasets",
+      payload: {
+        name: `integration-dataset-${randomUUID()}`,
+        description: "integration snapshot",
+      },
+    });
+    expect(createdDataset.statusCode).toBe(201);
+    datasetId = (createdDataset.json() as { datasetId: string }).datasetId;
+
+    const revision = await app.inject({
+      method: "POST",
+      url: `/api/v1/datasets/${datasetId}/revisions`,
+      payload: {
+        note: "baseline",
+        items: [
+          {
+            traceId: datasetTraceId,
+            expectedOutput: "Refund completed",
+            expectedBehavior: "Only promise a refund after tool success",
+            tags: ["refund", "integration"],
+          },
+        ],
+      },
+    });
+    expect(revision.statusCode).toBe(201);
+    const revisionBody = revision.json() as DatasetRevisionDetail;
+    expect(revisionBody).toMatchObject({
+      revision: 1,
+      itemCount: 1,
+      items: [
+        {
+          caseId: "refund-case-integration",
+          sourceTraceId: datasetTraceId,
+          expectedBehavior: "Only promise a refund after tool success",
+        },
+      ],
+    });
+    const item = revisionBody.items[0];
+    expect(item).toBeDefined();
+    if (item !== undefined) {
+      expect(item.inputContentRef).not.toBe(datasetInputContentId);
+      expect(item.baselineOutputContentRef).not.toBe(
+        datasetOutputContentId,
+      );
+      expect(item.expectedOutputContentRef).not.toBeNull();
+      datasetContentIds.push(
+        item.inputContentRef,
+        item.baselineOutputContentRef,
+        ...(item.expectedOutputContentRef === null
+          ? []
+          : [item.expectedOutputContentRef]),
+      );
+    }
+
+    const revisionDetail = await app.inject({
+      method: "GET",
+      url: `/api/v1/datasets/${datasetId}/revisions/${revisionBody.revisionId}`,
+    });
+    expect(revisionDetail.statusCode).toBe(200);
+    expect(revisionDetail.json()).toMatchObject({
+      revision: 1,
+      items: [
+        {
+          caseId: "refund-case-integration",
+          sourceTraceId: datasetTraceId,
+        },
+      ],
+    });
+
+    const dataset = await app.inject({
+      method: "GET",
+      url: `/api/v1/datasets/${datasetId}`,
+    });
+    expect(dataset.statusCode).toBe(200);
+    expect(dataset.json()).toMatchObject({
+      latestRevision: 1,
+      itemCount: 1,
+      revisions: [{ revision: 1, itemCount: 1 }],
+    });
+
+    const candidateContent = await app.inject({
+      method: "POST",
+      url: "/api/v1/content",
+      headers: { authorization: "Bearer integration-secret" },
+      payload: {
+        ownerApp: "integration-app",
+        contentKind: "agent_output",
+        mediaType: "text/plain",
+        captureMode: "full",
+        redactionRuleVersion: "v1",
+        content: "Refund completed",
+      },
+    });
+    expect(candidateContent.statusCode).toBe(201);
+    candidateOutputContentId = (
+      candidateContent.json() as { contentId: string }
+    ).contentId;
+    datasetContentIds.push(candidateOutputContentId);
+    await pool.query(
+      `insert into traces (
+        trace_id, root_span_id, app_name, run_name, service_name,
+        service_version, environment, task_type, prompt_version, eval_case_id,
+        model, run_status, first_span_at, last_span_at, start_time, end_time,
+        duration_ms, step_count, tool_error_count, input_tokens, output_tokens,
+        cost_micros, currency, completeness, ingest_state, sealed_at
+      ) values (
+        $1, 'candidate-root', 'integration-app', 'dataset candidate', 'worker',
+        '1.2.3', 'test', 'refund', 'prompt-v2', 'refund-case-integration',
+        'deepseek-flash', 'success', now(), now(), now(), now(), 90, 0, 0,
+        10, 5, 90, 'USD', 'complete', 'sealed_complete', now()
+      )`,
+      [candidateTraceId],
+    );
+    await pool.query(
+      `insert into spans (
+        trace_id, span_id, service_name, service_version, environment,
+        span_type, name, start_time, end_time, duration_ms, status,
+        resource_attributes, attributes, input_content_ref,
+        output_content_ref, content_recorded, schema_version
+      ) values (
+        $1, 'candidate-root', 'worker', '1.2.3', 'test', 'agent.run',
+        'refund-agent', now(), now(), 90, 'OK', '{}'::jsonb, '{}'::jsonb,
+        null, $2, 'full', '0.1'
+      )`,
+      [candidateTraceId, candidateOutputContentId],
+    );
+
+    const exactEvaluatorName = `exact-integration-${randomUUID()}`;
+    const evaluationResponse = await app.inject({
+      method: "POST",
+      url: "/api/v1/evaluations",
+      payload: {
+        datasetRevisionId: revisionBody.revisionId,
+        evaluator: {
+          name: exactEvaluatorName,
+          version: 1,
+          kind: "exact",
+          config: {},
+        },
+        traceSelector: {
+          appName: "integration-app",
+          promptVersion: "prompt-v2",
+          startedAfter: new Date(Date.now() - 60 * 60 * 1000).toISOString(),
+          startedBefore: new Date(Date.now() + 60 * 1000).toISOString(),
+        },
+      },
+    });
+    expect(evaluationResponse.statusCode).toBe(201);
+    evaluationId = (
+      evaluationResponse.json() as { evaluationId: string }
+    ).evaluationId;
+    const baselineEvaluationResponse = await app.inject({
+      method: "POST",
+      url: "/api/v1/evaluations",
+      payload: {
+        datasetRevisionId: revisionBody.revisionId,
+        evaluator: {
+          name: exactEvaluatorName,
+          version: 1,
+          kind: "exact",
+          config: {},
+        },
+        traceSelector: {
+          appName: "integration-app",
+          promptVersion: "prompt-v1",
+          startedAfter: new Date(Date.now() - 60 * 60 * 1000).toISOString(),
+          startedBefore: new Date(Date.now() + 60 * 1000).toISOString(),
+        },
+      },
+    });
+    expect(baselineEvaluationResponse.statusCode).toBe(201);
+    baselineEvaluationId = (
+      baselineEvaluationResponse.json() as { evaluationId: string }
+    ).evaluationId;
+    const listedEvaluations = await app.inject({
+      method: "GET",
+      url: "/api/v1/evaluations",
+    });
+    expect(listedEvaluations.statusCode).toBe(200);
+    expect(listedEvaluations.json()).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          evaluationId,
+          status: "queued",
+          datasetRevisionId: revisionBody.revisionId,
+        }),
+      ]),
+    );
+    const evaluationWorker = createEvaluationWorker(
+      createPostgresEvaluationWorkerStore(
+        pool,
+        createObjectTextReader({
+          endpoint: "http://127.0.0.1:9000",
+          region: "us-east-1",
+          bucket: "agent-ops-content",
+          accessKey: "agent_ops",
+          secretKey: "agent_ops_dev_secret",
+        }),
+        createObjectTextWriter({
+          endpoint: "http://127.0.0.1:9000",
+          region: "us-east-1",
+          bucket: "agent-ops-content",
+          accessKey: "agent_ops",
+          secretKey: "agent_ops_dev_secret",
+        }),
+      ),
+    );
+    await expect(evaluationWorker.processNextRun()).resolves.toBe(true);
+    await expect(evaluationWorker.processNextRun()).resolves.toBe(true);
+
+    const evaluated = await app.inject({
+      method: "GET",
+      url: `/api/v1/evaluations/${evaluationId}`,
+    });
+    expect(evaluated.statusCode).toBe(200);
+    expect(evaluated.json()).toMatchObject({
+      status: "completed",
+      totalCases: 1,
+      scoredCases: 1,
+      passedCases: 1,
+      failedCases: 0,
+      averageScore: 1,
+      cases: [
+        {
+          caseId: "refund-case-integration",
+          candidateTraceId,
+          status: "completed",
+          score: 1,
+          passed: true,
+        },
+      ],
+    });
+    const score = await pool.query(
+      `select source, value
+       from scores
+       where evaluation_run_id = $1`,
+      [evaluationId],
+    );
+    expect(score.rows).toHaveLength(1);
+    expect(score.rows[0]).toMatchObject({
+      source: "rule",
+      value: { score: 1, pass: true },
+    });
+
+    const comparison = await app.inject({
+      method: "GET",
+      url: `/api/v1/evaluations/${baselineEvaluationId}/compare/${evaluationId}`,
+    });
+    expect(comparison.statusCode).toBe(200);
+    expect(comparison.json()).toMatchObject({
+      pairedCases: 1,
+      baselineOnlyCases: 0,
+      candidateOnlyCases: 0,
+      baseline: {
+        candidatePromptVersion: "prompt-v1",
+        passedCases: 0,
+        averageScore: 0,
+      },
+      candidate: {
+        candidatePromptVersion: "prompt-v2",
+        passedCases: 1,
+        averageScore: 1,
+      },
+      cases: [
+        {
+          caseId: "refund-case-integration",
+          scoreDelta: 1,
+        },
+      ],
+    });
+
+    const judgeEvaluation = await app.inject({
+      method: "POST",
+      url: "/api/v1/evaluations",
+      payload: {
+        datasetRevisionId: revisionBody.revisionId,
+        evaluator: {
+          name: `judge-integration-${randomUUID()}`,
+          version: 1,
+          kind: "llm_judge",
+          config: {
+            model: "deepseek-flash",
+            rubric:
+              "Pass only when the candidate is complete, correct, and grounded in the input.",
+            allowExternalContent: true,
+            temperature: 0,
+          },
+        },
+        traceSelector: {
+          appName: "integration-app",
+          promptVersion: "prompt-v2",
+          startedAfter: new Date(Date.now() - 60 * 60 * 1000).toISOString(),
+          startedBefore: new Date(Date.now() + 60 * 1000).toISOString(),
+        },
+      },
+    });
+    expect(judgeEvaluation.statusCode).toBe(201);
+    judgeEvaluationId = (
+      judgeEvaluation.json() as { evaluationId: string }
+    ).evaluationId;
+    const judgeWorker = createEvaluationWorker(
+      createPostgresEvaluationWorkerStore(
+        pool,
+        createObjectTextReader({
+          endpoint: "http://127.0.0.1:9000",
+          region: "us-east-1",
+          bucket: "agent-ops-content",
+          accessKey: "agent_ops",
+          secretKey: "agent_ops_dev_secret",
+        }),
+        createObjectTextWriter({
+          endpoint: "http://127.0.0.1:9000",
+          region: "us-east-1",
+          bucket: "agent-ops-content",
+          accessKey: "agent_ops",
+          secretKey: "agent_ops_dev_secret",
+        }),
+      ),
+      {
+        judgeClient: {
+          evaluate: async () => ({
+            content:
+              '{"score":0.9,"pass":true,"reason":"Complete and grounded","category":"correct"}',
+            inputTokens: 40,
+            outputTokens: 12,
+          }),
+        },
+      },
+    );
+    await expect(judgeWorker.processNextRun()).resolves.toBe(true);
+
+    const judged = await app.inject({
+      method: "GET",
+      url: `/api/v1/evaluations/${judgeEvaluationId}`,
+    });
+    expect(judged.statusCode).toBe(200);
+    expect(judged.json()).toMatchObject({
+      status: "completed",
+      evaluatorKind: "llm_judge",
+      scoredCases: 1,
+      passedCases: 1,
+      averageScore: 0.9,
+      cases: [
+        {
+          status: "completed",
+          score: 0.9,
+          passed: true,
+          judgeCall: {
+            status: "completed",
+            provider: "deepseek",
+            model: "deepseek-flash",
+            promptContentRef: expect.any(String),
+            responseContentRef: expect.any(String),
+            inputTokens: 40,
+            outputTokens: 12,
+          },
+        },
+      ],
+    });
   });
 });

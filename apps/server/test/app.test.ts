@@ -156,6 +156,34 @@ describe("Agent Ops server", () => {
     await app.close();
   });
 
+  it("prevents metadata-only viewers from creating datasets", async () => {
+    const create = vi.fn();
+    const app = buildApp({
+      dependencies: testDependencies({
+        humanAuth: createDevHumanAuth({
+          subject: "viewer",
+          displayName: "Viewer",
+          email: null,
+          role: "viewer",
+        }),
+        datasets: {
+          ...testDependencies().datasets,
+          create,
+        },
+      }),
+    });
+
+    const response = await app.inject({
+      method: "POST",
+      url: "/api/v1/datasets",
+      payload: { name: "Regression cases" },
+    });
+
+    expect(response.statusCode).toBe(403);
+    expect(create).not.toHaveBeenCalled();
+    await app.close();
+  });
+
   it("rejects malformed content IDs before querying object metadata", async () => {
     const get = vi.fn();
     const app = buildApp({
@@ -165,6 +193,10 @@ describe("Agent Ops server", () => {
             throw new Error("not configured");
           },
           get,
+          copy: async () => {
+            throw new Error("not configured");
+          },
+          discard: async () => undefined,
           auditDenied: async () => undefined,
         },
       }),
@@ -221,6 +253,10 @@ describe("Agent Ops server", () => {
             throw new Error("not configured");
           },
           get,
+          copy: async () => {
+            throw new Error("not configured");
+          },
+          discard: async () => undefined,
           auditDenied,
         },
       }),
@@ -266,7 +302,33 @@ function testDependencies(
       get: async () => {
         throw new Error("not configured");
       },
+      copy: async () => {
+        throw new Error("not configured");
+      },
+      discard: async () => undefined,
       auditDenied: async () => undefined,
+    },
+    datasets: {
+      list: async () => [],
+      get: async () => null,
+      getRevision: async () => null,
+      create: async () => {
+        throw new Error("not configured");
+      },
+      createRevision: async () => {
+        throw new Error("not configured");
+      },
+    },
+    evaluations: {
+      list: async () => [],
+      get: async () => null,
+      create: async () => {
+        throw new Error("not configured");
+      },
+      cancel: async () => null,
+      compare: async () => {
+        throw new Error("not configured");
+      },
     },
     feedback: {
       create: async () => {

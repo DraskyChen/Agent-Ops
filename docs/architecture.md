@@ -373,6 +373,13 @@ GET  /api/v1/me
 GET  /api/v1/metrics/overview
 GET  /api/v1/metrics/breakdown
 POST /api/v1/scores
+GET  /api/v1/datasets
+POST /api/v1/datasets
+POST /api/v1/datasets/:datasetId/revisions
+GET  /api/v1/evaluations
+POST /api/v1/evaluations
+GET  /api/v1/evaluations/:evaluationId
+POST /api/v1/evaluations/:evaluationId/cancel
 ```
 
 `/api/v1/scores` remains reserved for the evaluation phase. User feedback uses
@@ -618,8 +625,16 @@ price_versions
   notes                  text nullable
 ```
 
-Dataset and evaluation tables are deferred until the trace vertical slice is
-working.
+Dataset revisions are immutable, and items snapshot input, baseline output, and
+expected output content independently from trace retention. Evaluation runs pin
+a dataset revision and evaluator version, match candidate traces by
+`agent.eval.case_id`, and execute deterministic rules asynchronously in the
+worker before appending scores. The admin-enabled DeepSeek judge uses the same
+run model, requires explicit external-content consent, validates a fixed
+`score/pass/reason/category` response, and audits prompt/response objects and
+token usage. Two runs are comparable only when they use the same dataset
+revision and evaluator version; comparisons report quality, average cost, P95
+latency, and per-case deltas.
 
 `price_versions` is insert-only. For each LLM span, the worker selects the
 version matching provider, model, currency, pricing tier, and span start time,
@@ -773,7 +788,9 @@ inspect its inputs, outputs, model calls, and tool failure.
 
 Implemented in Phase 3: shared metric definitions, hourly rollups, estimated
 latency histograms, overview/breakdown APIs, and a dashboard with trace
-drill-down. Capacity evidence and metadata archive policy remain rollout work.
+drill-down. A one-day, one-million-span synthetic baseline is recorded in
+[the capacity report](capacity.md); a warmed 30-day dataset, concurrent OTLP
+traffic, archival, and restore measurements remain rollout work.
 
 Exit criterion: cost, status, latency, and tool failure rate use one agreed
 definition and can navigate to the underlying traces.

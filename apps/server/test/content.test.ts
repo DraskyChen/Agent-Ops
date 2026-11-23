@@ -74,6 +74,54 @@ describe("content service", () => {
     ).rejects.toBeInstanceOf(ContentTooLargeError);
   });
 
+  it("clones an available object with an independent retention window", async () => {
+    const records = new Map<string, ContentRecord>();
+    const blobs = new Map<string, Buffer>();
+    const service = createContentService(
+      {
+        async put(key, _mediaType, body) {
+          blobs.set(key, Buffer.from(body));
+        },
+        async get(key) {
+          return Readable.from(blobs.get(key) ?? Buffer.alloc(0));
+        },
+        async delete(key) {
+          blobs.delete(key);
+        },
+      },
+      repository(records),
+      {
+        maxBytes: 1024,
+        retentionDays: 30,
+        now: () => new Date("2026-11-22T00:00:00.000Z"),
+      },
+    );
+    const source = await service.upload({
+      ownerApp: "source-app",
+      contentKind: "llm_input",
+      mediaType: "text/plain",
+      captureMode: "full",
+      redactionRuleVersion: "v1",
+      body: Buffer.from("snapshot me"),
+    });
+
+    const copy = await service.copy({
+      contentId: source.contentId,
+      actorSubject: "reviewer",
+      ownerApp: "agent-ops-datasets",
+      contentKind: "dataset_input",
+      retentionDays: 180,
+    });
+
+    expect(copy.contentId).not.toBe(source.contentId);
+    expect(copy.ownerApp).toBe("agent-ops-datasets");
+    expect(copy.contentKind).toBe("dataset_input");
+    expect(copy.expiresAt?.toISOString()).toBe(
+      "2027-05-21T00:00:00.000Z",
+    );
+    expect(blobs.get(copy.objectKey)?.toString("utf8")).toBe("snapshot me");
+  });
+
   it("records access and rejects content whose retention window elapsed", async () => {
     const recordAccess = vi.fn().mockResolvedValue(undefined);
     const service = createContentService(
@@ -155,6 +203,11 @@ function repository(records: Map<string, ContentRecord>): ContentRepository {
     },
     async find(contentId) {
       return records.get(contentId) ?? null;
+    },
+    async delete(contentId) {
+      const record = records.get(contentId);
+      records.delete(contentId);
+      return record?.objectKey ?? null;
     },
     async recordAccess() {
       return undefined;

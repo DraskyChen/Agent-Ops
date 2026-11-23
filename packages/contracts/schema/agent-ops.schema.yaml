@@ -217,6 +217,11 @@ span_types:
       - name: agent.prompt.version
         type: string
         req: recommended
+      - name: agent.eval.case_id
+        type: string
+        req: optional
+        max_chars: 128
+        description: "Stable evaluation case identifier shared by compared runs"
       - name: agent.run.status
         type: string
         req: required

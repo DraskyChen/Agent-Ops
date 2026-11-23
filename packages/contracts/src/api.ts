@@ -28,6 +28,7 @@ export interface TraceListQuery {
   taskType?: string;
   model?: string;
   promptVersion?: string;
+  evalCaseId?: string;
   serviceVersion?: string;
   hasErrors?: "true" | "false";
   reviewStatus?: string;
@@ -44,6 +45,7 @@ export interface TraceListItem {
   taskType: string | null;
   model: string | null;
   promptVersion: string | null;
+  evalCaseId: string | null;
   environment: Environment | null;
   runStatus: RunStatus | null;
   latencyMs: number | null;
@@ -251,6 +253,239 @@ export interface MetricsBreakdownResponse {
   scope: MetricsScope;
   dimension: MetricsDimension;
   items: MetricsBreakdownRow[];
+}
+
+export interface DatasetSummary {
+  datasetId: string;
+  name: string;
+  description: string | null;
+  latestRevision: number | null;
+  itemCount: number;
+  createdBy: string;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface DatasetRevisionSummary {
+  revisionId: string;
+  datasetId: string;
+  revision: number;
+  itemCount: number;
+  note: string | null;
+  createdBy: string;
+  createdAt: string;
+}
+
+export interface DatasetItem {
+  itemId: string;
+  caseId: string;
+  sourceTraceId: string;
+  appName: string | null;
+  promptVersion: string | null;
+  taskType: string | null;
+  model: string | null;
+  environment: Environment | null;
+  runStatus: RunStatus | null;
+  sourceStartedAt: string | null;
+  inputContentRef: string;
+  baselineOutputContentRef: string;
+  expectedOutputContentRef: string | null;
+  expectedBehavior: string | null;
+  tags: string[];
+}
+
+export interface DatasetDetail extends DatasetSummary {
+  revisions: DatasetRevisionSummary[];
+}
+
+export interface DatasetRevisionDetail extends DatasetRevisionSummary {
+  items: DatasetItem[];
+}
+
+export interface DatasetCreateRequest {
+  name: string;
+  description?: string;
+}
+
+export interface DatasetItemDraft {
+  traceId: string;
+  caseId?: string;
+  expectedOutput?: string;
+  expectedBehavior?: string;
+  tags?: string[];
+}
+
+export interface DatasetRevisionCreateRequest {
+  note?: string;
+  items: DatasetItemDraft[];
+}
+
+export type RuleEvaluatorDefinition =
+  | {
+      name: string;
+      version: number;
+      kind: "exact";
+      config: { ignoreCase?: boolean };
+    }
+  | {
+      name: string;
+      version: number;
+      kind: "contains";
+      config: { value: string; ignoreCase?: boolean };
+    }
+  | {
+      name: string;
+      version: number;
+      kind: "regex";
+      config: { pattern: string; ignoreCase?: boolean };
+    }
+  | {
+      name: string;
+      version: number;
+      kind: "json_valid";
+      config: Record<string, never>;
+    }
+  | {
+      name: string;
+      version: number;
+      kind: "max_latency_ms";
+      config: { value: number };
+    }
+  | {
+      name: string;
+      version: number;
+      kind: "max_cost_micros";
+      config: { value: number };
+    }
+  | {
+      name: string;
+      version: number;
+      kind: "max_tool_errors";
+      config: { value: number };
+    };
+
+export interface LlmJudgeDefinition {
+  name: string;
+  version: number;
+  kind: "llm_judge";
+  config: {
+    model: string;
+    rubric: string;
+    allowExternalContent: true;
+    temperature?: number;
+  };
+}
+
+export type EvaluatorDefinition =
+  | RuleEvaluatorDefinition
+  | LlmJudgeDefinition;
+
+export interface EvaluationTraceSelector {
+  appName?: string;
+  promptVersion?: string;
+  serviceVersion?: string;
+  environment?: Environment;
+  startedAfter?: string;
+  startedBefore?: string;
+}
+
+export interface EvaluationCreateRequest {
+  datasetRevisionId: string;
+  evaluator: EvaluatorDefinition;
+  traceSelector: EvaluationTraceSelector;
+}
+
+export type EvaluationStatus =
+  | "queued"
+  | "running"
+  | "completed"
+  | "failed"
+  | "cancelled";
+
+export type EvaluationCaseStatus =
+  | "pending"
+  | "missing"
+  | "unscorable"
+  | "completed"
+  | "failed";
+
+export interface EvaluationSummary {
+  evaluationId: string;
+  datasetId: string;
+  datasetName: string;
+  datasetRevisionId: string;
+  datasetRevision: number;
+  evaluatorName: string;
+  evaluatorVersion: number;
+  evaluatorKind: EvaluatorDefinition["kind"];
+  candidateAppName: string | null;
+  candidatePromptVersion: string | null;
+  status: EvaluationStatus;
+  totalCases: number;
+  scoredCases: number;
+  passedCases: number;
+  failedCases: number;
+  missingCases: number;
+  unscorableCases: number;
+  erroredCases: number;
+  averageScore: number | null;
+  averageCostMicros: number | null;
+  p50LatencyMs: number | null;
+  p95LatencyMs: number | null;
+  requestedBy: string;
+  createdAt: string;
+  startedAt: string | null;
+  completedAt: string | null;
+  lastError: string | null;
+}
+
+export interface EvaluationCaseResult {
+  evaluationCaseId: string;
+  datasetItemId: string;
+  caseId: string;
+  candidateTraceId: string | null;
+  status: EvaluationCaseStatus;
+  score: number | null;
+  passed: boolean | null;
+  reason: string | null;
+  error: string | null;
+  judgeCall: JudgeCallSummary | null;
+  latencyMs: number | null;
+  costMicros: number | null;
+}
+
+export interface JudgeCallSummary {
+  status: "pending" | "completed" | "failed";
+  provider: "deepseek";
+  model: string;
+  promptContentRef: string | null;
+  responseContentRef: string | null;
+  inputTokens: number | null;
+  outputTokens: number | null;
+  costMicros: number | null;
+}
+
+export interface EvaluationDetail extends EvaluationSummary {
+  traceSelector: EvaluationTraceSelector;
+  cases: EvaluationCaseResult[];
+}
+
+export interface EvaluationComparisonCase {
+  caseId: string;
+  baseline: EvaluationCaseResult | null;
+  candidate: EvaluationCaseResult | null;
+  scoreDelta: number | null;
+  latencyDeltaMs: number | null;
+  costDeltaMicros: number | null;
+}
+
+export interface EvaluationComparison {
+  baseline: EvaluationSummary;
+  candidate: EvaluationSummary;
+  pairedCases: number;
+  baselineOnlyCases: number;
+  candidateOnlyCases: number;
+  cases: EvaluationComparisonCase[];
 }
 
 export interface HealthResponse {

@@ -104,16 +104,16 @@ function createTransaction(client: PoolClient): AggregationTransaction {
       await client.query(
         `insert into traces (
           trace_id, session_id, root_span_id, app_name, run_name, service_name,
-          service_version, environment, task_type, prompt_version, model,
-          run_status, stop_reason, first_span_at, last_span_at, start_time,
-          end_time, root_ended_at, duration_ms, step_count, llm_call_count,
-          tool_call_count, tool_error_count, input_tokens, output_tokens,
-          cost_micros, currency, completeness, ingest_state, sealed_at,
-          aggregation_revision
+          service_version, environment, task_type, prompt_version,
+          eval_case_id, model, run_status, stop_reason, first_span_at,
+          last_span_at, start_time, end_time, root_ended_at, duration_ms,
+          step_count, llm_call_count, tool_call_count, tool_error_count,
+          input_tokens, output_tokens, cost_micros, currency, completeness,
+          ingest_state, sealed_at, aggregation_revision
         ) values (
           $1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15,
           $16, $17, $18, $19, $20, $21, $22, $23, $24, $25, $26, $27, $28,
-          $29, $30, 1
+          $29, $30, $31, 1
         )
         on conflict (trace_id) do update set
           session_id = excluded.session_id,
@@ -125,6 +125,7 @@ function createTransaction(client: PoolClient): AggregationTransaction {
           environment = excluded.environment,
           task_type = excluded.task_type,
           prompt_version = excluded.prompt_version,
+          eval_case_id = excluded.eval_case_id,
           model = excluded.model,
           run_status = excluded.run_status,
           stop_reason = excluded.stop_reason,
@@ -297,6 +298,7 @@ function traceValues(trace: AggregatedTrace): unknown[] {
     trace.environment,
     trace.taskType,
     trace.promptVersion,
+    trace.evalCaseId,
     trace.model,
     trace.runStatus,
     trace.stopReason,

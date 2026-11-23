@@ -48,6 +48,7 @@ export function createPostgresTraceReadRepository(
         "t.prompt_version",
         query.promptVersion,
       );
+      addExactFilter(conditions, values, "t.eval_case_id", query.evalCaseId);
       addExactFilter(
         conditions,
         values,
@@ -97,6 +98,7 @@ export function createPostgresTraceReadRepository(
         `select
           t.trace_id, t.run_name, t.session_id, t.app_name,
           t.service_version, t.task_type, t.model, t.prompt_version,
+          t.eval_case_id,
           t.environment, t.run_status, t.duration_ms, t.cost_micros,
           t.input_tokens, t.output_tokens, t.step_count, t.tool_error_count,
           t.start_time, t.ingest_state,
@@ -135,6 +137,7 @@ export function createPostgresTraceReadRepository(
         `select
           t.trace_id, t.run_name, t.session_id, t.app_name,
           t.service_version, t.task_type, t.model, t.prompt_version,
+          t.eval_case_id,
           t.environment, t.run_status, t.duration_ms, t.cost_micros,
           t.input_tokens, t.output_tokens, t.step_count, t.tool_error_count,
           t.start_time, t.ingest_state, t.stop_reason,
@@ -208,6 +211,7 @@ interface TraceRow {
   task_type: string | null;
   model: string | null;
   prompt_version: string | null;
+  eval_case_id: string | null;
   environment: string | null;
   run_status: string | null;
   duration_ms: string | null;
@@ -277,6 +281,7 @@ function mapTraceListItem(row: TraceRow): TraceListItem {
       row.task_type === null ? null : normalizeTaskType(row.task_type),
     model: row.model,
     promptVersion: row.prompt_version,
+    evalCaseId: row.eval_case_id,
     environment: normalizeEnvironment(row.environment),
     runStatus:
       row.run_status !== null && isRunStatus(row.run_status)

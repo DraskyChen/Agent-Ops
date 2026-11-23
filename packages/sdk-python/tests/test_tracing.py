@@ -47,6 +47,7 @@ def test_agent_llm_and_failed_tool_spans_share_one_trace(
     with agent_run(
         session_id="session-1",
         task_type="refund",
+        eval_case_id="refund-case-001",
         input_summary="user=alice@example.com phone=13800138000",
     ) as run:
         assert isinstance(run, AgentRunHandle)
@@ -76,6 +77,7 @@ def test_agent_llm_and_failed_tool_spans_share_one_trace(
     assert root.attributes[Attr.AGENT_SPAN_TYPE] == "agent.run"
     assert root.attributes[Attr.AGENT_RUN_STATUS] == "success"
     assert root.attributes[Attr.AGENT_RUN_STOP_REASON] == "final_answer"
+    assert root.attributes[Attr.AGENT_EVAL_CASE_ID] == "refund-case-001"
     assert root.attributes[Attr.AGENT_INPUT_SUMMARY] == (
         "user=[REDACTED_EMAIL] phone=[REDACTED_PHONE]"
     )

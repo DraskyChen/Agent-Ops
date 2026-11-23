@@ -30,6 +30,7 @@ export interface AggregatedTrace {
   environment: string | null;
   taskType: string | null;
   promptVersion: string | null;
+  evalCaseId: string | null;
   model: string | null;
   runStatus: string | null;
   stopReason: string | null;
@@ -88,6 +89,7 @@ export function aggregateTraceSpans(
     (firstLlm === undefined
       ? null
       : stringValue(firstLlm.attributes["agent.prompt.version"]) ?? null);
+  const evalCaseId = stringValue(rootAttributes["agent.eval.case_id"]);
   const sealAfter =
     root === undefined
       ? new Date(lastSpan.end_time.getTime() + clock.idleTimeoutMs)
@@ -112,6 +114,7 @@ export function aggregateTraceSpans(
     environment: root?.environment ?? fallback.environment,
     taskType: stringValue(rootAttributes["agent.task.type"]),
     promptVersion,
+    evalCaseId,
     model,
     runStatus,
     stopReason: stringValue(rootAttributes["agent.run.stop_reason"]),

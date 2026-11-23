@@ -10,6 +10,7 @@ const app = buildApp({
     pool,
     auth: config.auth,
     traceMaxLatenessHours: config.traceMaxLatenessHours,
+    evaluationJudgeEnabled: config.evaluationJudgeEnabled,
     ...(config.ingestToken === undefined
       ? {}
       : { ingestToken: config.ingestToken }),

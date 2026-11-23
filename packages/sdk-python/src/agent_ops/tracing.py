@@ -128,6 +128,7 @@ def agent_run(
     run_id: str | None = None,
     user_id: str | None = None,
     prompt_version: str | None = None,
+    eval_case_id: str | None = None,
     content_recorded: str = "metadata_only",
     input_summary: str | None = None,
     output_summary: str | None = None,
@@ -147,6 +148,7 @@ def agent_run(
     _set_optional(attributes, Attr.AGENT_RUN_ID, run_id)
     _set_optional(attributes, Attr.AGENT_USER_ID, user_id)
     _set_optional(attributes, Attr.AGENT_PROMPT_VERSION, prompt_version)
+    _set_optional(attributes, Attr.AGENT_EVAL_CASE_ID, eval_case_id)
 
     span = get_tracer().start_span(name, attributes=attributes)
     token = _attach(span)

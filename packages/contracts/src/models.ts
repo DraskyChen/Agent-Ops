@@ -88,6 +88,7 @@ export interface TraceProjection {
   environment?: Environment;
   taskType?: string;
   promptVersion?: string;
+  evalCaseId?: string;
   model?: string;
   runStatus?: RunStatus;
   stopReason?: string;

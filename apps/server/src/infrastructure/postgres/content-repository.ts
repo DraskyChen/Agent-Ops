@@ -75,6 +75,16 @@ export function createPostgresContentRepository(
       };
     },
 
+    async delete(contentId) {
+      const result = await pool.query<{ object_key: string }>(
+        `delete from content_objects
+         where content_id = $1
+         returning object_key`,
+        [contentId],
+      );
+      return result.rows[0]?.object_key ?? null;
+    },
+
     async recordAccess(event: ContentAccessEvent) {
       await pool.query(
         `insert into content_access_log (

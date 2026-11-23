@@ -39,6 +39,7 @@ export interface AgentRunOptions<TResult = unknown>
   runId?: string;
   userId?: string;
   promptVersion?: string;
+  evalCaseId?: string;
 }
 
 export interface AgentRunHandle {
@@ -61,6 +62,7 @@ export async function withAgentRun<T>(
       ...optional(ATTR.agentRunId, options.runId),
       ...optional(ATTR.agentUserId, options.userId),
       ...optional(ATTR.agentPromptVersion, options.promptVersion),
+      ...optional(ATTR.agentEvalCaseId, options.evalCaseId),
     },
   });
   const inputContent = captureOptional("agent_input", options.inputContent);

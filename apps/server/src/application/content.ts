@@ -30,6 +30,14 @@ export interface ContentRecord {
   expiresAt: Date | null;
 }
 
+export interface ContentCopyInput {
+  contentId: string;
+  actorSubject: string | null;
+  ownerApp: string;
+  contentKind: string;
+  retentionDays: number;
+}
+
 export interface StoredContent {
   metadata: ContentRecord;
   body: Readable;
@@ -44,13 +52,23 @@ export interface ContentBlobStore {
 export interface ContentRepository {
   insert(record: ContentRecord): Promise<void>;
   find(contentId: string): Promise<ContentRecord | null>;
+  delete(contentId: string): Promise<string | null>;
   recordAccess(event: ContentAccessEvent): Promise<void>;
 }
 
 export interface ContentService {
-  upload(input: ContentUploadInput): Promise<ContentRecord>;
+  upload(
+    input: ContentUploadInput,
+    options?: ContentUploadOptions,
+  ): Promise<ContentRecord>;
   get(contentId: string, actorSubject: string | null): Promise<StoredContent>;
+  copy(input: ContentCopyInput): Promise<ContentRecord>;
+  discard(contentId: string): Promise<void>;
   auditDenied(contentId: string, actorSubject: string | null): Promise<void>;
+}
+
+export interface ContentUploadOptions {
+  retentionDays?: number;
 }
 
 export interface ContentServiceOptions {
@@ -114,9 +132,14 @@ export function createContentService(
   options: ContentServiceOptions,
 ): ContentService {
   const now = options.now ?? (() => new Date());
-  return {
-    async upload(input) {
+  const service: ContentService = {
+    async upload(input, uploadOptions = {}) {
       validateUpload(input, options.maxBytes);
+      const retentionDays =
+        uploadOptions.retentionDays ?? options.retentionDays;
+      if (!Number.isInteger(retentionDays) || retentionDays <= 0) {
+        throw new InvalidContentError("retentionDays must be a positive integer");
+      }
       const contentId = randomUUID();
       const uploadedAt = now();
       const extension = contentFileExtension(input.mediaType);
@@ -140,7 +163,7 @@ export function createContentService(
         encryption: "deployment-managed",
         status: "available",
         expiresAt: new Date(
-          uploadedAt.getTime() + options.retentionDays * 24 * 60 * 60 * 1000,
+          uploadedAt.getTime() + retentionDays * 24 * 60 * 60 * 1000,
         ),
       };
 
@@ -204,6 +227,29 @@ export function createContentService(
       }
     },
 
+    async copy(input) {
+      const source = await service.get(input.contentId, input.actorSubject);
+      const body = await readBody(source.body);
+      return service.upload(
+        {
+          ownerApp: input.ownerApp,
+          contentKind: input.contentKind,
+          mediaType: source.metadata.mediaType,
+          captureMode: "full",
+          redactionRuleVersion: source.metadata.redactionRuleVersion,
+          body,
+        },
+        { retentionDays: input.retentionDays },
+      );
+    },
+
+    async discard(contentId) {
+      const objectKey = await repository.delete(contentId);
+      if (objectKey !== null) {
+        await blobs.delete(objectKey);
+      }
+    },
+
     async auditDenied(contentId, actorSubject) {
       await record(
         repository,
@@ -214,6 +260,15 @@ export function createContentService(
       );
     },
   };
+  return service;
+}
+
+async function readBody(body: Readable): Promise<Uint8Array> {
+  const chunks: Buffer[] = [];
+  for await (const chunk of body) {
+    chunks.push(Buffer.isBuffer(chunk) ? chunk : Buffer.from(chunk));
+  }
+  return Buffer.concat(chunks);
 }
 
 async function record(

@@ -9,6 +9,7 @@
     "architecture:check": "node scripts/check-architecture.mjs",
     "build": "pnpm -r --workspace-concurrency=1 --if-present build",
     "check": "pnpm typecheck && pnpm architecture:check && pnpm test && pnpm lint:python && pnpm typecheck:python && pnpm test:python",
+    "capacity:test": "pnpm --filter @agent-ops/server capacity:test",
     "contracts:build": "pnpm --filter @agent-ops/contracts build",
     "contracts:generate": "pnpm --filter @agent-ops/contracts generate",
     "dev": "pnpm -r --parallel --if-present dev",
@@ -20,15 +21,23 @@
     "examples:python": "uv run --project examples/python python examples/python/run_all.py",
     "infra:up": "docker compose -f infra/docker-compose/compose.yaml up -d",
     "infra:down": "docker compose -f infra/docker-compose/compose.yaml down",
+    "release:build": "docker compose --env-file .env.production -f infra/docker-compose/compose.production.yaml build",
+    "release:config": "docker compose --env-file .env.production -f infra/docker-compose/compose.production.yaml config",
+    "release:check": "node infra/release/check-config.mjs",
+    "release:up": "docker compose --env-file .env.production -f infra/docker-compose/compose.production.yaml up -d",
+    "release:down": "docker compose --env-file .env.production -f infra/docker-compose/compose.production.yaml down",
+    "release:smoke": "sh infra/release/smoke.sh",
+    "backup": "sh infra/backup/backup.sh",
+    "restore": "sh infra/backup/restore.sh",
     "metrics:backfill": "pnpm --filter @agent-ops/worker metrics:backfill",
     "metrics:load-test": "pnpm --filter @agent-ops/worker metrics:load-test",
     "format:check": "pnpm -r --if-present format:check",
-    "lint:python": "uv run --project packages/sdk-python ruff check packages/sdk-python",
+    "lint:python": "uv run --project packages/sdk-python --extra dev ruff check packages/sdk-python",
     "test": "pnpm -r --if-present test",
     "test:integration": "pnpm --filter @agent-ops/server test:integration",
-    "test:python": "uv run --project packages/sdk-python pytest -q",
-    "typecheck": "pnpm contracts:build && pnpm --filter @agent-ops/metrics build && pnpm -r --workspace-concurrency=1 --if-present typecheck",
-    "typecheck:python": "uv run --project packages/sdk-python mypy packages/sdk-python/src/agent_ops"
+    "test:python": "uv run --project packages/sdk-python --extra dev pytest -q",
+    "typecheck": "pnpm contracts:build && pnpm --filter @agent-ops/metrics build && pnpm --filter @agent-ops/sdk build && pnpm -r --workspace-concurrency=1 --if-present typecheck",
+    "typecheck:python": "uv run --project packages/sdk-python --extra dev mypy packages/sdk-python/src/agent_ops"
   }
 }
 

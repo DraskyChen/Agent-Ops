@@ -47,11 +47,34 @@ Implemented:
   application/model/task/version distributions.
 - Dashboard-to-trace drill-down with bucket-aligned time ranges and structured filters.
 - Live trace list, detail, review, and content console backed by the query API.
+- Optional `agent.eval.case_id` in the TypeScript and Python SDKs for strict
+  cross-version pairing.
+- Immutable dataset revisions created from sealed traces, with copied input,
+  baseline output, and expected output content.
+- Evaluation-run APIs, strict candidate matching by `case_id`, and deterministic
+  exact, contains, regex, JSON, latency, cost, and tool-error rules.
+- Dataset and Evaluation consoles for creating revisions, starting rule
+  evaluations, polling run status, and inspecting per-case results.
+- Admin-enabled DeepSeek LLM Judge with structured scoring, explicit external
+  content consent, prompt/response auditing, token usage, and validation retry.
+- Two-run comparison over the same dataset revision and evaluator version,
+  including pass rate, score, cost, P95 latency, and per-case deltas.
+- A single-team production Compose file, multi-stage application image, Nginx
+  reverse proxy, and automatic migration service. Image build verification
+  still requires Docker Hub connectivity.
+- A recorded one-day, one-million-span database baseline for trace persistence,
+  list/search/detail latency, and storage.
+- SHA-256-checked PostgreSQL/MinIO backups, an explicitly confirmed full-restore
+  script, and a real development-stack restore drill.
+- CI gates for quality, real-dependency integration, and all image targets,
+  plus production config validation, release smoke checks, and an
+  OIDC/SDK/backup/rollback runbook.
 - Independent PostgreSQL and MinIO development stack.
 
 Not implemented yet:
 
-- Datasets, automated scoring, rule evaluation, and LLM-judge workflows.
+- Container build/startup verification, warmed 30-day/concurrent OTLP capacity,
+  production RPO/RTO and offsite backup acceptance, and release acceptance.
 
 ## Local development
 
@@ -85,6 +108,22 @@ Pass `--from` and `--to` ISO timestamps to limit a rebuild.
 connected to the same disposable database. It refuses to run without that
 explicit override.
 
+`pnpm capacity:test` uses `CAPACITY_TEST_DATABASE_URL` to load a disposable
+database with one million spans by default and measure trace persistence,
+list/search/detail queries, and storage. Capacity test rows are automatically
+removed. See [the capacity baseline](docs/capacity.md) for results and limits.
+
+Backup and restore commands:
+
+```bash
+pnpm backup
+CONFIRM_RESTORE=yes pnpm restore /path/to/agent-ops-snapshot
+```
+
+Restore stops the application and fully replaces the database and object
+bucket. See [the backup/restore drill](docs/backup-restore.md) for results and
+production requirements.
+
 Python SDK:
 
 ```bash
@@ -98,6 +137,29 @@ Run the platform:
 ```bash
 pnpm dev
 ```
+
+## Single-team container release
+
+```bash
+cp .env.production.example .env.production
+```
+
+The production configuration uses OIDC and requires
+`AGENT_OPS_INGEST_TOKEN`, PostgreSQL credentials, and object-store
+credentials. Only the Web entry point is exposed by default; SDKs should use
+`https://<host>/v1/traces`.
+
+```bash
+pnpm release:config
+pnpm release:build
+pnpm release:up
+docker compose --env-file .env.production \
+  -f infra/docker-compose/compose.production.yaml ps
+```
+
+The `migrate` service runs before Server and Worker. Web listens on
+`http://127.0.0.1:8080` by default, and the MinIO console is bound to local
+port `9001`.
 
 Local development defaults to `AGENT_OPS_AUTH_MODE=dev`. OIDC mode requires
 the `OIDC_*` values documented in `.env.example`; the server refuses to start in

@@ -19,6 +19,8 @@ import {
   healthLabel,
   useServerHealth,
 } from "./features/health/useServerHealth.js";
+import { DatasetsPage } from "./features/datasets/DatasetsPage.js";
+import { EvaluationsPage } from "./features/evaluations/EvaluationsPage.js";
 import {
   DashboardPage,
 } from "./features/metrics/DashboardPage.js";
@@ -35,7 +37,12 @@ import {
 } from "./features/traces/model.js";
 
 type Theme = "light" | "dark";
-type ConsolePage = "dashboards" | "traces" | "operations";
+type ConsolePage =
+  | "dashboards"
+  | "traces"
+  | "operations"
+  | "evaluations"
+  | "datasets";
 
 export function Console() {
   const health = useServerHealth();
@@ -99,11 +106,29 @@ export function Console() {
                 updateConsoleUrl("operations");
               }}
             />
-            <NavItem icon={<FlaskConical size={16} />} label="Evaluations" disabled />
+            <NavItem
+              active={page === "evaluations"}
+              icon={<FlaskConical size={16} />}
+              label="Evaluations"
+              onClick={() => {
+                setPage("evaluations");
+                explorer.closeTrace();
+                updateConsoleUrl("evaluations");
+              }}
+            />
           </NavSection>
           <NavSection label="Manage">
             <NavItem icon={<Braces size={16} />} label="Prompts" disabled />
-            <NavItem icon={<Database size={16} />} label="Datasets" disabled />
+            <NavItem
+              active={page === "datasets"}
+              icon={<Database size={16} />}
+              label="Datasets"
+              onClick={() => {
+                setPage("datasets");
+                explorer.closeTrace();
+                updateConsoleUrl("datasets");
+              }}
+            />
           </NavSection>
         </nav>
 
@@ -140,10 +165,14 @@ export function Console() {
               {page === "dashboards"
                 ? "Dashboards"
                 : page === "operations"
-                ? "Operations"
-                : explorer.selectedTraceId === null
-                  ? "Traces"
-                  : explorer.selectedTrace?.runName ?? "Trace detail"}
+                  ? "Operations"
+                  : page === "evaluations"
+                    ? "Evaluations"
+                    : page === "datasets"
+                      ? "Datasets"
+                      : explorer.selectedTraceId === null
+                        ? "Traces"
+                        : explorer.selectedTrace?.runName ?? "Trace detail"}
             </strong>
           </div>
           <div className="topbar-actions">
@@ -207,6 +236,13 @@ export function Console() {
           />
         ) : page === "operations" ? (
           <OperationsPage />
+        ) : page === "datasets" ? (
+          <DatasetsPage canManage={canManage(explorer.me.role)} />
+        ) : page === "evaluations" ? (
+          <EvaluationsPage
+            canManage={canManage(explorer.me.role)}
+            canJudge={explorer.me.role === "admin"}
+          />
         ) : explorer.selectedTraceId === null ? (
           <TraceListPage
             traces={explorer.traces}
@@ -321,7 +357,12 @@ function readInitialConsoleState(): {
   const params = new URLSearchParams(window.location.search);
   const view = params.get("view");
   const page: ConsolePage =
-    view === "dashboards" || view === "operations" ? view : "traces";
+    view === "dashboards" ||
+    view === "operations" ||
+    view === "evaluations" ||
+    view === "datasets"
+      ? view
+      : "traces";
   const startedAfter = params.get("startedAfter");
   const startedBefore = params.get("startedBefore");
   return {
@@ -362,6 +403,10 @@ function readInitialConsoleState(): {
         : {}),
     },
   };
+}
+
+function canManage(role: "viewer" | "reviewer" | "admin"): boolean {
+  return role === "reviewer" || role === "admin";
 }
 
 function updateConsoleUrl(

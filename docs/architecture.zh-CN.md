@@ -320,6 +320,13 @@ GET  /api/v1/me
 GET  /api/v1/metrics/overview
 GET  /api/v1/metrics/breakdown
 POST /api/v1/scores
+GET  /api/v1/datasets
+POST /api/v1/datasets
+POST /api/v1/datasets/:datasetId/revisions
+GET  /api/v1/evaluations
+POST /api/v1/evaluations
+GET  /api/v1/evaluations/:evaluationId
+POST /api/v1/evaluations/:evaluationId/cancel
 ```
 
 `/api/v1/scores` 保留给后续评测阶段。用户 Feedback 使用应用凭证并通过
@@ -557,7 +564,13 @@ price_versions
   notes                  text nullable
 ```
 
-数据集和评测表在 Trace 纵向链路跑通后再设计。
+数据集修订不可变，条目保存独立的输入、基线和期望内容快照。评测运行固定
+数据集修订和评测器版本，通过 `agent.eval.case_id` 严格匹配候选 Trace；
+确定性规则和经管理员显式启用的 DeepSeek Judge 由 Worker 异步执行。
+Judge 只接受固定 `score/pass/reason/category` 结构，并将脱敏后的
+Prompt 与原始响应作为独立内容对象审计，结果追加写入 `scores`。
+两个运行只有在数据集修订和评测器版本一致时才能比较；对比服务返回
+质量、平均成本、P95 延迟和逐用例差值。
 
 `price_versions` 只追加、不原地修改。对每个 LLM Span，Worker 按提供方、模型、币种、价格档位和 Span 开始时间选择价目版本，将计算出的 `cost_micros` 和 `price_version_id` 写入 Span，再汇总到 Trace 投影。DeepSeek 高峰/低峰规则见 [pricing.md](pricing.md)。
 
@@ -679,7 +692,9 @@ SDK 和内容请求使用 TLS。应用机器凭证保存在 Agent 运行时的�
 - 存储保留期和归档任务。
 
 Phase 3 已实现共享指标定义、小时汇总、估算延迟直方图、总览/分布 API，以及
-可下钻 Trace 的 Dashboard。容量证据和元数据归档策略仍属于上线前工作。
+可下钻 Trace 的 Dashboard。当前已在独立数据库记录每天 100 万 Span 的
+写入、列表、宽泛搜索、详情和存储基线，见
+[容量基线](capacity.md)；30 天热数据、并发 OTLP 和归档仍属于上线前工作。
 
 退出标准：成本、状态、延迟和工具失败率均使用同一套经过确认的定义，并且可以从图表进入对应的 Trace。
 

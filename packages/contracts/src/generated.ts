@@ -37,6 +37,7 @@ export const ATTR = {
   agentContentRecorded: "agent.content.recorded",
   agentCostCurrency: "agent.cost.currency",
   agentErrorCategory: "agent.error.category",
+  agentEvalCaseId: "agent.eval.case_id",
   agentInputRef: "agent.input.ref",
   agentInputSummary: "agent.input.summary",
   agentLlmCost: "agent.llm.cost",
