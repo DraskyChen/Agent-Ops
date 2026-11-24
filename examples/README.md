@@ -115,7 +115,7 @@ DeepSeek 当前官方 OpenAI-compatible 模型名包括 `deepseek-flash` 和
 打开：
 
 ```text
-http://127.0.0.1:5173/console
+http://localhost:3000/console
 ```
 
 点击 Refresh 后，可以看到新 Trace、执行树、token、费用、耗时、工具错误和已记录的输入输出摘要。
