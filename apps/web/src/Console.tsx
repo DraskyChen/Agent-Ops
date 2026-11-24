@@ -1,8 +1,10 @@
 import {
   Activity,
   Braces,
+  Clock3,
   Database,
   FlaskConical,
+  Inbox,
   LayoutDashboard,
   LayoutList,
   LockKeyhole,
@@ -13,13 +15,17 @@ import {
   ShieldCheck,
   Sun,
 } from "lucide-react";
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 
+import { CandidatesPage } from "./features/candidates/CandidatesPage.js";
 import {
   healthLabel,
   useServerHealth,
 } from "./features/health/useServerHealth.js";
-import { DatasetsPage } from "./features/datasets/DatasetsPage.js";
+import {
+  DatasetsPage,
+  type DatasetSelection,
+} from "./features/datasets/DatasetsPage.js";
 import { EvaluationsPage } from "./features/evaluations/EvaluationsPage.js";
 import {
   DashboardPage,
@@ -28,6 +34,9 @@ import type {
   DashboardDrilldown,
 } from "./features/metrics/model.js";
 import { OperationsPage } from "./features/operations/OperationsPage.js";
+import { PromptsPage } from "./features/prompts/PromptsPage.js";
+import { SessionPage } from "./features/sessions/SessionPage.js";
+import { SessionsPage } from "./features/sessions/SessionsPage.js";
 import { TraceDetailPage } from "./features/traces/TraceDetailPage.js";
 import { TraceListPage } from "./features/traces/TraceListPage.js";
 import { useTraceExplorer } from "./features/traces/useTraceExplorer.js";
@@ -40,8 +49,12 @@ type Theme = "light" | "dark";
 type ConsolePage =
   | "dashboards"
   | "traces"
+  | "session"
+  | "sessions"
   | "operations"
   | "evaluations"
+  | "candidates"
+  | "prompts"
   | "datasets";
 
 export function Console() {
@@ -52,6 +65,15 @@ export function Console() {
     "authError",
   );
   const [page, setPage] = useState<ConsolePage>(initial.page);
+  const [sessionId, setSessionId] = useState<string | null>(
+    initial.sessionId ?? null,
+  );
+  const [sessionSource, setSessionSource] = useState<
+    "sessions" | "traces"
+  >("sessions");
+  const [datasetTarget, setDatasetTarget] =
+    useState<DatasetSelection | null>(null);
+  const initialTraceOpened = useRef(false);
   const [theme, setTheme] = useState<Theme>(() =>
     window.localStorage.getItem("agent-ops-theme") === "dark" ? "dark" : "light",
   );
@@ -60,6 +82,20 @@ export function Console() {
     document.documentElement.dataset.theme = theme;
     window.localStorage.setItem("agent-ops-theme", theme);
   }, [theme]);
+
+  useEffect(() => {
+    if (
+      initialTraceOpened.current ||
+      explorer.authLoading ||
+      explorer.me === null ||
+      initial.page !== "traces" ||
+      initial.traceId === undefined
+    ) {
+      return;
+    }
+    initialTraceOpened.current = true;
+    void explorer.openTraceById(initial.traceId);
+  }, [explorer.authLoading, explorer.me, initial]);
 
   return (
     <div className="console-shell">
@@ -97,6 +133,16 @@ export function Console() {
               }}
             />
             <NavItem
+              active={page === "sessions" || page === "session"}
+              icon={<Clock3 size={16} />}
+              label="Sessions"
+              onClick={() => {
+                setPage("sessions");
+                explorer.closeTrace();
+                updateConsoleUrl("sessions");
+              }}
+            />
+            <NavItem
               active={page === "operations"}
               icon={<ShieldCheck size={16} />}
               label="Operations"
@@ -118,12 +164,32 @@ export function Console() {
             />
           </NavSection>
           <NavSection label="Manage">
-            <NavItem icon={<Braces size={16} />} label="Prompts" disabled />
+            <NavItem
+              active={page === "prompts"}
+              icon={<Braces size={16} />}
+              label="Prompts"
+              onClick={() => {
+                setPage("prompts");
+                explorer.closeTrace();
+                updateConsoleUrl("prompts");
+              }}
+            />
+            <NavItem
+              active={page === "candidates"}
+              icon={<Inbox size={16} />}
+              label="Candidates"
+              onClick={() => {
+                setPage("candidates");
+                explorer.closeTrace();
+                updateConsoleUrl("candidates");
+              }}
+            />
             <NavItem
               active={page === "datasets"}
               icon={<Database size={16} />}
               label="Datasets"
               onClick={() => {
+                setDatasetTarget(null);
                 setPage("datasets");
                 explorer.closeTrace();
                 updateConsoleUrl("datasets");
@@ -168,6 +234,14 @@ export function Console() {
                   ? "Operations"
                   : page === "evaluations"
                     ? "Evaluations"
+                    : page === "candidates"
+                      ? "Candidates"
+                    : page === "session"
+                      ? "Session"
+                    : page === "prompts"
+                      ? "Prompts"
+                    : page === "sessions"
+                      ? "Sessions"
                     : page === "datasets"
                       ? "Datasets"
                       : explorer.selectedTraceId === null
@@ -236,19 +310,101 @@ export function Console() {
           />
         ) : page === "operations" ? (
           <OperationsPage />
+        ) : page === "sessions" ? (
+          <SessionsPage
+            onOpenSession={(nextSessionId) => {
+              setSessionId(nextSessionId);
+              setSessionSource("sessions");
+              setPage("session");
+              updateConsoleUrl(
+                "session",
+                undefined,
+                undefined,
+                nextSessionId,
+              );
+            }}
+          />
+        ) : page === "session" ? (
+          <SessionPage
+            sessionId={sessionId ?? ""}
+            backLabel={
+              sessionSource === "sessions" ? "Back to sessions" : "Back to traces"
+            }
+            onOpenTrace={(traceId) => {
+              setPage("traces");
+              void explorer.openTraceById(traceId);
+              updateConsoleUrl("traces", explorer.filters, traceId);
+            }}
+            onBack={() => {
+              setPage(sessionSource);
+              updateConsoleUrl(
+                sessionSource,
+                sessionSource === "traces" ? explorer.filters : undefined,
+              );
+            }}
+          />
+        ) : page === "candidates" ? (
+          <CandidatesPage
+            canManage={canManage(explorer.me.role)}
+            onOpenTrace={(traceId) => {
+              setPage("traces");
+              void explorer.openTraceById(traceId);
+              updateConsoleUrl("traces", explorer.filters, traceId);
+            }}
+            onOpenDatasets={() => {
+              setDatasetTarget(null);
+              setPage("datasets");
+              explorer.closeTrace();
+              updateConsoleUrl("datasets");
+            }}
+          />
         ) : page === "datasets" ? (
-          <DatasetsPage canManage={canManage(explorer.me.role)} />
+          <DatasetsPage
+            canManage={canManage(explorer.me.role)}
+            initialSelection={datasetTarget}
+          />
+        ) : page === "prompts" ? (
+          <PromptsPage
+            canManage={canManage(explorer.me.role)}
+            onOpenPrompt={(promptVersion) => {
+              const filters = {
+                ...explorer.filters,
+                promptVersion,
+                timeRange: "30d" as const,
+                startedAfter: undefined,
+                startedBefore: undefined,
+              };
+              setPage("traces");
+              explorer.closeTrace();
+              explorer.replaceFilters(filters);
+              updateConsoleUrl("traces", filters);
+            }}
+          />
         ) : page === "evaluations" ? (
           <EvaluationsPage
             canManage={canManage(explorer.me.role)}
             canJudge={explorer.me.role === "admin"}
+            onOpenTrace={(traceId) => {
+              setPage("traces");
+              void explorer.openTraceById(traceId);
+              updateConsoleUrl("traces", explorer.filters, traceId);
+            }}
+            onOpenDatasetItem={(selection) => {
+              setDatasetTarget(selection);
+              setPage("datasets");
+              explorer.closeTrace();
+              updateConsoleUrl("datasets");
+            }}
           />
         ) : explorer.selectedTraceId === null ? (
           <TraceListPage
             traces={explorer.traces}
             filters={explorer.filters}
             setFilter={explorer.setFilter}
-            onOpenTrace={explorer.openTrace}
+            onOpenTrace={(trace) => {
+              void explorer.openTrace(trace);
+              updateConsoleUrl("traces", explorer.filters, trace.id);
+            }}
             loading={explorer.loading}
             loadingMore={explorer.loadingMore}
             hasMore={explorer.nextCursor !== null}
@@ -264,10 +420,30 @@ export function Console() {
             inspectorTab={explorer.inspectorTab}
             onSelectSpan={(span) => explorer.selectSpan(span.id)}
             onInspectorTab={explorer.setInspectorTab}
-            onBack={explorer.closeTrace}
+            onBack={() => {
+              explorer.closeTrace();
+              updateConsoleUrl("traces", explorer.filters);
+            }}
             me={explorer.me}
             reviewSubmitting={explorer.reviewSubmitting}
             onSubmitReview={explorer.submitReview}
+            onOpenDatasets={() => {
+              setPage("datasets");
+              explorer.closeTrace();
+              updateConsoleUrl("datasets");
+            }}
+            onOpenSession={(nextSessionId) => {
+              setSessionId(nextSessionId);
+              setSessionSource("traces");
+              setPage("session");
+              explorer.closeTrace();
+              updateConsoleUrl(
+                "session",
+                undefined,
+                undefined,
+                nextSessionId,
+              );
+            }}
             error={explorer.loadError}
           />
         )}
@@ -353,13 +529,19 @@ function traceFiltersFromDrilldown(
 function readInitialConsoleState(): {
   page: ConsolePage;
   filters: TraceFilters;
+  traceId?: string;
+  sessionId?: string;
 } {
   const params = new URLSearchParams(window.location.search);
   const view = params.get("view");
   const page: ConsolePage =
     view === "dashboards" ||
     view === "operations" ||
+    view === "session" ||
+    view === "sessions" ||
     view === "evaluations" ||
+    view === "candidates" ||
+    view === "prompts" ||
     view === "datasets"
       ? view
       : "traces";
@@ -367,6 +549,12 @@ function readInitialConsoleState(): {
   const startedBefore = params.get("startedBefore");
   return {
     page,
+    ...(params.get("traceId") === null
+      ? {}
+      : { traceId: params.get("traceId") as string }),
+    ...(params.get("sessionId") === null
+      ? {}
+      : { sessionId: params.get("sessionId") as string }),
     filters: {
       ...DEFAULT_FILTERS,
       ...(startedAfter === null
@@ -412,8 +600,16 @@ function canManage(role: "viewer" | "reviewer" | "admin"): boolean {
 function updateConsoleUrl(
   page: ConsolePage,
   filters?: TraceFilters,
+  traceId?: string,
+  sessionId?: string,
 ): void {
   const params = new URLSearchParams({ view: page });
+  if (traceId !== undefined) {
+    params.set("traceId", traceId);
+  }
+  if (sessionId !== undefined) {
+    params.set("sessionId", sessionId);
+  }
   if (filters !== undefined) {
     if (filters.startedAfter !== undefined) {
       params.set("startedAfter", filters.startedAfter);

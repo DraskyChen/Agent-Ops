@@ -1,6 +1,7 @@
 import type {
   ApiErrorResponse,
   EvaluationCreateRequest,
+  EvaluatorTemplateCreateRequest,
 } from "@agent-ops/contracts";
 import type { FastifyInstance, FastifyReply } from "fastify";
 
@@ -27,6 +28,36 @@ export function registerEvaluationRoutes(
     }
     return evaluations.list();
   });
+
+  app.get("/api/v1/evaluators", async (request, reply) => {
+    const principal = await requirePrincipal(humanAuth, request, reply);
+    if (principal === null) {
+      return;
+    }
+    return evaluations.listEvaluators();
+  });
+
+  app.post<{ Body: EvaluatorTemplateCreateRequest }>(
+    "/api/v1/evaluators",
+    async (request, reply) => {
+      const principal = await requirePrincipal(
+        humanAuth,
+        request,
+        reply,
+        "reviewer",
+      );
+      if (principal === null) {
+        return;
+      }
+      try {
+        return reply.code(201).send(
+          await evaluations.createEvaluator(principal, request.body),
+        );
+      } catch (error) {
+        return sendEvaluationError(reply, error);
+      }
+    },
+  );
 
   app.get<{ Params: { evaluationId: string } }>(
     "/api/v1/evaluations/:evaluationId",

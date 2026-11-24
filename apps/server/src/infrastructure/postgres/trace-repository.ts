@@ -10,6 +10,7 @@ import {
   type ReviewItem,
   type ReviewState,
   type ReviewStatus,
+  type SessionSummary,
   type TraceDetail,
   type TraceListItem,
   type TraceSpan,
@@ -19,6 +20,7 @@ import type { Pool } from "pg";
 import {
   encodeTraceCursor,
   type NormalizedTraceListQuery,
+  type NormalizedSessionListQuery,
   type TraceReadRepository,
 } from "../../application/traces.js";
 
@@ -132,6 +134,95 @@ export function createPostgresTraceReadRepository(
       };
     },
 
+    async listSessions(query) {
+      const values: unknown[] = [query.startedAfter];
+      let searchCondition = "";
+      if (query.search !== undefined) {
+        values.push(`%${query.search}%`);
+        const index = values.length;
+        searchCondition = `where (
+          session_id ilike $${index}
+          or coalesce(app_name, '') ilike $${index}
+          or coalesce(run_name, '') ilike $${index}
+        )`;
+      }
+      values.push(query.limit);
+      const limitIndex = values.length;
+      const result = await pool.query<SessionSummaryRow>(
+        `with recent_runs as (
+           select
+             trace_id, run_name, session_id, app_name, start_time,
+             duration_ms, run_status, cost_micros, input_tokens,
+             output_tokens, tool_error_count
+           from traces
+           where session_id is not null and start_time >= $1
+         ),
+         matching_sessions as (
+           select distinct session_id
+           from recent_runs
+           ${searchCondition}
+         ),
+         filtered_runs as (
+           select r.*
+           from recent_runs r
+           join matching_sessions m on m.session_id = r.session_id
+         )
+         select
+           session_id,
+           count(*)::integer as trace_count,
+           min(start_time) as first_started_at,
+           max(start_time + coalesce(duration_ms, 0) * interval '1 millisecond')
+             as last_ended_at,
+           round(extract(epoch from (
+             max(start_time + coalesce(duration_ms, 0) * interval '1 millisecond')
+             - min(start_time)
+           )) * 1000)::bigint as duration_ms,
+           coalesce(sum(cost_micros), 0)::bigint as total_cost_micros,
+           coalesce(sum(input_tokens), 0)::bigint as input_tokens,
+           coalesce(sum(output_tokens), 0)::bigint as output_tokens,
+           coalesce(sum(tool_error_count), 0)::bigint as tool_error_count,
+           count(*) filter (where run_status is null)::integer as unknown_count,
+           count(*) filter (where run_status = 'success')::integer as success_count,
+           count(*) filter (where run_status = 'failed')::integer as failed_count,
+           count(*) filter (where run_status = 'partial')::integer as partial_count,
+           count(*) filter (where run_status = 'cancelled')::integer as cancelled_count,
+           count(*) filter (where run_status = 'timeout')::integer as timeout_count,
+           array_remove(array_agg(distinct app_name), null) as app_names
+         from filtered_runs
+         group by session_id
+         order by last_ended_at desc, session_id desc
+         limit $${limitIndex}`,
+        values,
+      );
+      return result.rows.map(mapSessionSummary);
+    },
+
+    async listBySession(sessionId) {
+      const result = await pool.query<TraceRow>(
+        `select
+          t.trace_id, t.run_name, t.session_id, t.app_name,
+          t.service_version, t.task_type, t.model, t.prompt_version,
+          t.eval_case_id,
+          t.environment, t.run_status, t.duration_ms, t.cost_micros,
+          t.input_tokens, t.output_tokens, t.step_count, t.tool_error_count,
+          t.start_time, t.ingest_state,
+          latest_review.status as review_status
+        from traces t
+        left join lateral (
+          select status
+          from trace_reviews
+          where trace_id = t.trace_id
+          order by created_at desc, id desc
+          limit 1
+        ) latest_review on true
+        where t.session_id = $1 and t.start_time is not null
+        order by t.start_time asc, t.trace_id asc
+        limit 500`,
+        [sessionId],
+      );
+      return result.rows.map(mapTraceListItem);
+    },
+
     async get(traceId) {
       const traceResult = await pool.query<TraceRow>(
         `select
@@ -226,6 +317,25 @@ interface TraceRow {
   review_status: string | null;
 }
 
+interface SessionSummaryRow {
+  session_id: string;
+  trace_count: number;
+  first_started_at: Date;
+  last_ended_at: Date;
+  duration_ms: string;
+  total_cost_micros: string;
+  input_tokens: string;
+  output_tokens: string;
+  tool_error_count: string;
+  unknown_count: number;
+  success_count: number;
+  failed_count: number;
+  partial_count: number;
+  cancelled_count: number;
+  timeout_count: number;
+  app_names: string[];
+}
+
 interface SpanRow {
   span_id: string;
   parent_span_id: string | null;
@@ -298,6 +408,29 @@ function mapTraceListItem(row: TraceRow): TraceListItem {
     ingestState: isTraceIngestState(row.ingest_state)
       ? row.ingest_state
       : "open",
+  };
+}
+
+function mapSessionSummary(row: SessionSummaryRow): SessionSummary {
+  return {
+    sessionId: row.session_id,
+    traceCount: row.trace_count,
+    firstStartedAt: row.first_started_at.toISOString(),
+    lastEndedAt: row.last_ended_at.toISOString(),
+    durationMs: Number(row.duration_ms),
+    totalCostMicros: Number(row.total_cost_micros),
+    inputTokens: Number(row.input_tokens),
+    outputTokens: Number(row.output_tokens),
+    toolErrorCount: Number(row.tool_error_count),
+    statusCounts: {
+      unknown: row.unknown_count,
+      success: row.success_count,
+      failed: row.failed_count,
+      partial: row.partial_count,
+      cancelled: row.cancelled_count,
+      timeout: row.timeout_count,
+    },
+    appNames: row.app_names,
   };
 }
 

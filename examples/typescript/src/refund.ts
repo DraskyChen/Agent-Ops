@@ -3,14 +3,18 @@ import { withAgentRun, withLlmCall, withToolCall } from "@agent-ops/sdk";
 import { sleep } from "./shared.js";
 
 export async function runRefundExample(): Promise<void> {
+  const userInput =
+    "Review refund request for order A-18421 and decide whether an automatic refund is allowed.";
   await withAgentRun(
     {
       name: "refund-agent",
       sessionId: `example-refund-${Date.now()}`,
       taskType: "refund",
       promptVersion: "refund-v12",
-      inputSummary:
-        "Review refund request for order A-18421 and decide whether an automatic refund is allowed.",
+      evalCaseId: "refund-case-001",
+      inputSummary: userInput,
+      inputContent: { request: userInput },
+      extractOutputContent: (result) => result,
     },
     async (run) => {
       const order = await withToolCall(
@@ -70,7 +74,10 @@ export async function runRefundExample(): Promise<void> {
       );
 
       run.setCost(6400, "USD");
+      const response = `Your ${order.status} order is eligible for a full refund.`;
+      run.setOutputSummary(response);
       run.complete("success", "final_answer");
+      return response;
     },
   );
 }

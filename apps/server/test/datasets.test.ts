@@ -8,6 +8,7 @@ import type {
 import {
   DatasetCaseConflictError,
   DatasetTraceUnavailableError,
+  compareDatasetRevisionSnapshots,
   createDatasetService,
   type DatasetRepository,
 } from "../src/application/datasets.js";
@@ -125,6 +126,116 @@ describe("dataset service", () => {
             baselineOutputContentRef: "copied-output",
             expectedOutputContentRef: "copied-expected",
             tags: ["refund"],
+          }),
+        ],
+      },
+    );
+  });
+
+  it("creates a next revision from historical snapshots without re-reading source traces", async () => {
+    const datasetId = "00000000-0000-4000-8000-000000000001";
+    const baseRevisionId = "00000000-0000-4000-8000-000000000002";
+    const sourceItemId = "00000000-0000-4000-8000-000000000003";
+    const copy = vi
+      .fn()
+      .mockResolvedValueOnce(contentRecord("next-input"))
+      .mockResolvedValueOnce(contentRecord("next-baseline"))
+      .mockResolvedValueOnce(contentRecord("next-expected"));
+    const loadTraceSnapshots = vi.fn();
+    const createRevision = vi.fn().mockResolvedValue({
+      revisionId: "00000000-0000-4000-8000-000000000004",
+      datasetId,
+      revision: 2,
+      itemCount: 1,
+      note: "Derived from revision 1",
+      createdBy: "Reviewer One",
+      createdAt: "2026-11-24T10:00:00.000Z",
+      items: [],
+    });
+    const datasets = createDatasetService(
+      repository({
+        getRevision: vi.fn().mockResolvedValue({
+          revisionId: baseRevisionId,
+          datasetId,
+          revision: 1,
+          itemCount: 1,
+          note: "Baseline",
+          createdBy: "Reviewer One",
+          createdAt: "2026-11-23T10:00:00.000Z",
+          items: [
+            {
+              itemId: sourceItemId,
+              caseId: "refund-case-001",
+              sourceTraceId: "trace-1",
+              appName: "refund-agent",
+              promptVersion: "refund-v1",
+              taskType: "refund",
+              model: "deepseek-flash",
+              environment: "test",
+              runStatus: "success",
+              sourceStartedAt: "2026-11-23T09:00:00.000Z",
+              inputContentRef: "prior-input",
+              baselineOutputContentRef: "prior-baseline",
+              expectedOutputContentRef: "prior-expected",
+              expectedBehavior: "Original behavior",
+              tags: ["refund", "regression"],
+            },
+          ],
+        }),
+        loadTraceSnapshots,
+        createRevision,
+      }),
+      content({ copy }),
+      { contentRetentionDays: 180 },
+    );
+
+    await datasets.createRevision(datasetId, principal, {
+      baseRevisionId,
+      note: "Derived from revision 1",
+      items: [
+        {
+          sourceRevisionItemId: sourceItemId,
+          expectedBehavior: "Updated behavior",
+        },
+      ],
+    });
+
+    expect(loadTraceSnapshots).not.toHaveBeenCalled();
+    expect(copy).toHaveBeenNthCalledWith(1, {
+      contentId: "prior-input",
+      actorSubject: "reviewer-1",
+      ownerApp: "agent-ops-datasets",
+      contentKind: "dataset_input",
+      retentionDays: 180,
+    });
+    expect(copy).toHaveBeenNthCalledWith(2, {
+      contentId: "prior-baseline",
+      actorSubject: "reviewer-1",
+      ownerApp: "agent-ops-datasets",
+      contentKind: "dataset_baseline_output",
+      retentionDays: 180,
+    });
+    expect(copy).toHaveBeenNthCalledWith(3, {
+      contentId: "prior-expected",
+      actorSubject: "reviewer-1",
+      ownerApp: "agent-ops-datasets",
+      contentKind: "dataset_expected_output",
+      retentionDays: 180,
+    });
+    expect(createRevision).toHaveBeenCalledWith(
+      datasetId,
+      principal,
+      {
+        note: "Derived from revision 1",
+        items: [
+          expect.objectContaining({
+            caseId: "refund-case-001",
+            sourceTraceId: "trace-1",
+            inputContentRef: "next-input",
+            baselineOutputContentRef: "next-baseline",
+            expectedOutputContentRef: "next-expected",
+            expectedBehavior: "Updated behavior",
+            tags: ["refund", "regression"],
           }),
         ],
       },
@@ -259,6 +370,64 @@ describe("dataset service", () => {
     ).rejects.toThrow("database failed");
     expect(discard).toHaveBeenCalledTimes(3);
   });
+
+  it("compares revisions by content hashes and case metadata", () => {
+    const baselineItem = {
+      itemId: "item-1",
+      caseId: "case-1",
+      sourceTraceId: "trace-1",
+      appName: "refund-agent",
+      promptVersion: "refund-v1",
+      taskType: "refund",
+      model: "deepseek-flash",
+      environment: "test" as const,
+      runStatus: "success" as const,
+      sourceStartedAt: "2026-11-24T10:00:00.000Z",
+      inputContentRef: "input-1",
+      baselineOutputContentRef: "baseline-1",
+      expectedOutputContentRef: "expected-1",
+      expectedBehavior: "Verify first",
+      tags: ["refund"],
+      inputSha256: "input-hash",
+      baselineOutputSha256: "baseline-hash",
+      expectedOutputSha256: "expected-hash",
+    };
+    const diff = compareDatasetRevisionSnapshots(
+      "00000000-0000-4000-8000-000000000001",
+      {
+        summary: revisionSummary(1),
+        items: [
+          baselineItem,
+          { ...baselineItem, itemId: "item-old", caseId: "removed-case" },
+        ],
+      },
+      {
+        summary: revisionSummary(2),
+        items: [
+          {
+            ...baselineItem,
+            itemId: "item-2",
+            inputContentRef: "input-2",
+            expectedOutputContentRef: "expected-2",
+            expectedOutputSha256: "expected-hash-2",
+            expectedBehavior: "Verify order and window",
+          },
+          { ...baselineItem, itemId: "item-new", caseId: "added-case" },
+        ],
+      },
+    );
+
+    expect(diff).toMatchObject({
+      addedCount: 1,
+      removedCount: 1,
+      changedCount: 1,
+      unchangedCount: 0,
+    });
+    expect(diff.items.find((item) => item.caseId === "case-1")).toMatchObject({
+      status: "changed",
+      changes: ["expected_output", "expected_behavior"],
+    });
+  });
 });
 
 function repository(
@@ -268,12 +437,25 @@ function repository(
     list: async () => [],
     get: async () => datasetDetail(),
     getRevision: async () => null,
+    getRevisionSnapshot: async () => null,
     create: async () => datasetSummary(),
     loadTraceSnapshots: async () => [],
     createRevision: async () => {
       throw new Error("not configured");
     },
     ...overrides,
+  };
+}
+
+function revisionSummary(revision: number) {
+  return {
+    revisionId: `revision-${revision}`,
+    datasetId: "00000000-0000-4000-8000-000000000001",
+    revision,
+    itemCount: 1,
+    note: null,
+    createdBy: "Reviewer One",
+    createdAt: "2026-11-24T10:00:00.000Z",
   };
 }
 

@@ -104,15 +104,15 @@ export function useTraceExplorer(
     selectedTrace?.spans[0] ??
     null;
 
-  const openTrace = async (trace: TraceView) => {
-    setSelectedTraceId(trace.id);
+  const openTraceById = async (traceId: string) => {
+    setSelectedTraceId(traceId);
     setSelectedTrace(null);
     setSelectedSpanId(null);
     setDetailLoading(true);
     setLoadError(null);
     try {
       const detail = await fetchTraceDetail(
-        trace.id,
+        traceId,
         me?.canViewContent ?? false,
       );
       setSelectedTrace(detail);
@@ -130,6 +130,8 @@ export function useTraceExplorer(
       setDetailLoading(false);
     }
   };
+
+  const openTrace = (trace: TraceView) => openTraceById(trace.id);
 
   const loadMore = async () => {
     if (nextCursor === null || loadingMore) {
@@ -214,6 +216,7 @@ export function useTraceExplorer(
     loadMore,
     submitReview,
     openTrace,
+    openTraceById,
     closeTrace,
   };
 }

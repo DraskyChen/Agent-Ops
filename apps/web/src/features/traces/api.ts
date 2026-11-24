@@ -164,6 +164,7 @@ function toTraceView(trace: TraceListItem): TraceView {
     taskType: trace.taskType ?? "other",
     model: trace.model ?? "unknown",
     promptVersion: trace.promptVersion ?? "unknown",
+    evalCaseId: trace.evalCaseId,
     environment: trace.environment ?? "unknown",
     status: normalizeTraceStatus(trace.runStatus),
     ingestState: trace.ingestState,
@@ -184,8 +185,8 @@ function toTraceView(trace: TraceListItem): TraceView {
 function toSpanView(
   span: ApiTraceSpan,
   parentBySpanId: ReadonlyMap<string, string | null>,
-  inputContent: string | undefined,
-  outputContent: string | undefined,
+  inputContent: FetchedContent,
+  outputContent: FetchedContent,
 ): TraceSpanView {
   const attributesText = JSON.stringify(span.attributes, null, 2);
   const spanType = normalizeSpanType(span.spanType);
@@ -195,24 +196,28 @@ function toSpanView(
     type: spanType,
     status: normalizeSpanStatus(span.status),
     depth: spanDepth(span, parentBySpanId),
+    startTime: span.startTime,
+    endTime: span.endTime,
     latencyMs: span.durationMs,
     ...(span.inputTokens === null ? {} : { inputTokens: span.inputTokens }),
     ...(span.outputTokens === null ? {} : { outputTokens: span.outputTokens }),
     ...(span.costMicros === null ? {} : { costMicros: span.costMicros }),
     input:
-      inputContent ??
+      inputContent.text ??
       stringAttribute(span.attributes, "agent.input.summary") ??
       (spanType === "tool"
         ? stringAttribute(span.attributes, "agent.tool.args.summary")
         : undefined) ??
       attributesText,
     output:
-      outputContent ??
+      outputContent.text ??
       stringAttribute(span.attributes, "agent.output.summary") ??
       stringAttribute(span.attributes, "agent.error.message") ??
       (span.outputContentRef === null
         ? "No output summary captured."
         : `Content reference: ${span.outputContentRef}`),
+    inputDownloadable: inputContent.downloadable,
+    outputDownloadable: outputContent.downloadable,
     metadata: Object.fromEntries(
       Object.entries(span.attributes).map(([key, value]) => [
         key,
@@ -222,26 +227,43 @@ function toSpanView(
   };
 }
 
+interface FetchedContent {
+  text: string | undefined;
+  downloadable: boolean;
+}
+
 async function fetchContent(
   contentId: string | null,
   canViewContent: boolean,
-): Promise<string | undefined> {
+): Promise<FetchedContent> {
   if (contentId === null) {
-    return undefined;
+    return { text: undefined, downloadable: false };
   }
   if (!canViewContent) {
-    return "Content viewing requires reviewer permission.";
+    return {
+      text: "Content viewing requires reviewer permission.",
+      downloadable: false,
+    };
   }
   try {
-    return await getText(`/api/v1/content/${encodeURIComponent(contentId)}`);
+    return {
+      text: await getText(`/api/v1/content/${encodeURIComponent(contentId)}`),
+      downloadable: true,
+    };
   } catch (error) {
     if (error instanceof HttpError && error.status === 410) {
-      return "Content expired under the configured retention policy.";
+      return {
+        text: "Content expired under the configured retention policy.",
+        downloadable: false,
+      };
     }
     if (error instanceof HttpError && error.status === 403) {
-      return "Content viewing requires reviewer permission.";
+      return {
+        text: "Content viewing requires reviewer permission.",
+        downloadable: false,
+      };
     }
-    return "Content is unavailable.";
+    return { text: "Content is unavailable.", downloadable: false };
   }
 }
 

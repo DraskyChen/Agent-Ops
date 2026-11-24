@@ -2,12 +2,14 @@ import type { Pool } from "pg";
 
 import type { ServerDependencies } from "./application/dependencies.js";
 import { createContentService } from "./application/content.js";
+import { createCandidateService } from "./application/candidates.js";
 import { createDatasetService } from "./application/datasets.js";
 import { createEvaluationService } from "./application/evaluations.js";
 import { createFeedbackService } from "./application/feedback.js";
 import { createOtlpIngestService } from "./application/ingest.js";
 import { createMetricsService } from "./application/metrics.js";
 import { createOperationsService } from "./application/operations.js";
+import { createPromptRegistryService } from "./application/prompt-registry.js";
 import { createReviewService } from "./application/reviews.js";
 import { createTraceQueryService } from "./application/traces.js";
 import type { ServerConfig } from "./config.js";
@@ -17,11 +19,13 @@ import { createOidcHumanAuth } from "./infrastructure/auth/oidc-auth.js";
 import { createPostgresHumanAuthRepository } from "./infrastructure/postgres/auth-repository.js";
 import { createPostgresTraceBatchWriter } from "./infrastructure/postgres/ingest-writer.js";
 import { createPostgresContentRepository } from "./infrastructure/postgres/content-repository.js";
+import { createPostgresCandidateRepository } from "./infrastructure/postgres/candidate-repository.js";
 import { createPostgresDatasetRepository } from "./infrastructure/postgres/dataset-repository.js";
 import { createPostgresEvaluationRepository } from "./infrastructure/postgres/evaluation-repository.js";
 import { createPostgresFeedbackRepository } from "./infrastructure/postgres/feedback-repository.js";
 import { createPostgresMetricsRepository } from "./infrastructure/postgres/metrics-repository.js";
 import { createPostgresOperationsRepository } from "./infrastructure/postgres/operations-repository.js";
+import { createPostgresPromptRegistryRepository } from "./infrastructure/postgres/prompt-registry-repository.js";
 import { createPostgresReviewRepository } from "./infrastructure/postgres/review-repository.js";
 import { createPostgresTraceReadRepository } from "./infrastructure/postgres/trace-repository.js";
 import {
@@ -80,6 +84,9 @@ export async function createServerDependencies(
       }),
     ),
     content,
+    candidates: createCandidateService(
+      createPostgresCandidateRepository(options.pool),
+    ),
     datasets: createDatasetService(
       createPostgresDatasetRepository(options.pool),
       content,
@@ -100,6 +107,9 @@ export async function createServerDependencies(
     reviews: createReviewService(createPostgresReviewRepository(options.pool)),
     operations: createOperationsService(
       createPostgresOperationsRepository(options.pool),
+    ),
+    prompts: createPromptRegistryService(
+      createPostgresPromptRegistryRepository(options.pool),
     ),
     authorizeIngest: createIngestRequestAuthorizer(options.ingestToken),
   };

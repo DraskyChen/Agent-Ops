@@ -19,6 +19,7 @@ import {
   type DatasetTraceSnapshot,
   type NormalizedDatasetCreate,
   type NormalizedDatasetRevision,
+  type DatasetRevisionSnapshot,
 } from "../../application/datasets.js";
 
 export function createPostgresDatasetRepository(pool: Pool): DatasetRepository {
@@ -118,6 +119,48 @@ export function createPostgresDatasetRepository(pool: Pool): DatasetRepository {
         ...mapRevisionSummary(revision),
         items: items.rows.map(mapDatasetItem),
       };
+    },
+
+    async getRevisionSnapshot(datasetId, revisionId) {
+      const revisionResult = await pool.query<DatasetRevisionRow>(
+        `select
+          r.id as revision_id, r.dataset_id, r.revision, r.note,
+          r.created_by_name, r.created_at,
+          (select count(*) from dataset_items i
+           where i.dataset_revision_id = r.id)::integer as item_count
+        from dataset_revisions r
+        where r.dataset_id = $1 and r.id = $2`,
+        [datasetId, revisionId],
+      );
+      const revision = revisionResult.rows[0];
+      if (revision === undefined) {
+        return null;
+      }
+      const items = await pool.query<DatasetItemSnapshotRow>(
+        `select
+          i.id as item_id, i.case_id, i.source_trace_id, i.app_name,
+          i.prompt_version, i.task_type, i.model, i.environment,
+          i.run_status, i.source_started_at, i.input_content_ref,
+          i.baseline_output_content_ref, i.expected_output_content_ref,
+          i.expected_behavior, i.tags,
+          input.sha256 as input_sha256,
+          baseline.sha256 as baseline_output_sha256,
+          expected.sha256 as expected_output_sha256
+        from dataset_items i
+        left join content_objects input
+          on input.content_id::text = i.input_content_ref
+        left join content_objects baseline
+          on baseline.content_id::text = i.baseline_output_content_ref
+        left join content_objects expected
+          on expected.content_id::text = i.expected_output_content_ref
+        where i.dataset_revision_id = $1
+        order by i.case_id`,
+        [revisionId],
+      );
+      return {
+        summary: mapRevisionSummary(revision),
+        items: items.rows.map(mapDatasetItemSnapshot),
+      } satisfies DatasetRevisionSnapshot;
     },
 
     async create(principal, input) {
@@ -319,6 +362,12 @@ interface DatasetItemRow {
   tags: unknown;
 }
 
+interface DatasetItemSnapshotRow extends DatasetItemRow {
+  input_sha256: string | null;
+  baseline_output_sha256: string | null;
+  expected_output_sha256: string | null;
+}
+
 interface TraceSnapshotRow {
   trace_id: string;
   app_name: string | null;
@@ -380,6 +429,15 @@ function mapDatasetItem(row: DatasetItemRow): DatasetItem {
     tags: Array.isArray(row.tags)
       ? row.tags.filter((tag): tag is string => typeof tag === "string")
       : [],
+  };
+}
+
+function mapDatasetItemSnapshot(row: DatasetItemSnapshotRow) {
+  return {
+    ...mapDatasetItem(row),
+    inputSha256: row.input_sha256,
+    baselineOutputSha256: row.baseline_output_sha256,
+    expectedOutputSha256: row.expected_output_sha256,
   };
 }
 

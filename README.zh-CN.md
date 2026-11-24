@@ -54,6 +54,16 @@ TypeScript 或 Python Agent
   Prompt/响应审计、Token 用量和失败重试。
 - 同一数据集修订、同一评测器版本的双运行对比，展示通过率、平均分、
   成本、P95 延迟和逐用例差值。
+- 从 Trace 手动加入数据集、切换修订历史、并排查看内容与跨修订差异。
+- 可复用评测器模板、历史配置复用、逐用例 Trace/Dataset 跳转和
+  Judge Prompt/响应审计查看。
+- 负反馈、未解决 Review、运行失败和评测失败 Trace 的候选数据发现页，
+  支持人工忽略与恢复。
+- Trace Waterfall、Span 搜索/错误过滤、可分享 Trace 链接、Session 目录
+  与运行时间线。
+- 只读 Prompt Registry，支持 Prompt 版本元数据、生命周期审计，以及
+  Trace/Dataset/Evaluation 关联统计。
+- 完整 Trace 内容的复制和下载，并在下载前提示访问审计与数据保留边界。
 - 单团队生产 Compose、多阶段应用镜像、Nginx 反向代理和自动迁移服务；
   镜像实际构建仍需可访问 Docker Hub 的环境。
 - 独立数据库中的每天 100 万 Span 写入、列表、宽泛搜索、详情和存储基线。

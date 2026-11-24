@@ -93,6 +93,149 @@ export interface TraceListResponse {
   nextCursor: string | null;
 }
 
+export interface SessionStatusCounts {
+  unknown: number;
+  success: number;
+  failed: number;
+  partial: number;
+  cancelled: number;
+  timeout: number;
+}
+
+export interface SessionSummary {
+  sessionId: string;
+  traceCount: number;
+  firstStartedAt: string | null;
+  lastEndedAt: string | null;
+  durationMs: number | null;
+  totalCostMicros: number;
+  inputTokens: number;
+  outputTokens: number;
+  toolErrorCount: number;
+  statusCounts: SessionStatusCounts;
+  appNames: string[];
+}
+
+export interface SessionDetail extends SessionSummary {
+  runs: TraceListItem[];
+}
+
+export interface SessionListQuery {
+  search?: string;
+  startedAfter?: string;
+  limit?: number;
+}
+
+export interface SessionListResponse {
+  windowHours: number;
+  generatedAt: string;
+  items: SessionSummary[];
+}
+
+export type PromptRegistryStatus = "active" | "deprecated";
+
+export interface PromptVersionSummary {
+  promptVersion: string;
+  name: string;
+  owner: string | null;
+  description: string | null;
+  status: PromptRegistryStatus;
+  traceCount: number;
+  datasetCount: number;
+  evaluationCount: number;
+  lastSeenAt: string | null;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface ObservedPromptVersion {
+  promptVersion: string;
+  traceCount: number;
+  lastSeenAt: string | null;
+}
+
+export interface PromptRegistryResponse {
+  entries: PromptVersionSummary[];
+  observedUnregistered: ObservedPromptVersion[];
+}
+
+export interface PromptVersionCreateRequest {
+  promptVersion: string;
+  name?: string;
+  owner?: string;
+  description?: string;
+  status?: PromptRegistryStatus;
+}
+
+export interface PromptVersionUpdateRequest {
+  name?: string;
+  owner?: string | null;
+  description?: string | null;
+  status?: PromptRegistryStatus;
+}
+
+export type PromptRegistryEventType = "created" | "updated";
+
+export interface PromptRegistryEvent {
+  eventId: string;
+  promptVersion: string;
+  eventType: PromptRegistryEventType;
+  actor: string;
+  before: Record<string, unknown>;
+  after: Record<string, unknown>;
+  createdAt: string;
+}
+
+export interface PromptVersionDetail {
+  prompt: PromptVersionSummary;
+  history: PromptRegistryEvent[];
+}
+
+export type CandidateReason =
+  | "negative_feedback"
+  | "review_open"
+  | "runtime_failure"
+  | "evaluation_failed"
+  | "evaluation_blocked";
+
+export interface TraceCandidate extends TraceListItem {
+  reasons: CandidateReason[];
+  feedbackTypes: FeedbackType[];
+  reviewIssueArea: ReviewIssueArea | null;
+  evaluationFailureCount: number;
+  evaluationBlockedCount: number;
+  datasetCount: number;
+  datasetEligible: boolean;
+  dismissedAt: string | null;
+  dismissedBy: string | null;
+}
+
+export interface TraceCandidateCounts {
+  active: number;
+  negativeFeedback: number;
+  reviewOpen: number;
+  runtimeFailure: number;
+  evaluationFailed: number;
+  evaluationBlocked: number;
+  dismissed: number;
+}
+
+export interface TraceCandidateListResponse {
+  windowHours: number;
+  generatedAt: string;
+  counts: TraceCandidateCounts;
+  items: TraceCandidate[];
+}
+
+export interface TraceCandidateDismissRequest {
+  reason?: string;
+}
+
+export interface TraceCandidateActionResponse {
+  traceId: string;
+  dismissed: boolean;
+}
+
 export interface FeedbackItem {
   feedbackId: string;
   traceId: string;
@@ -302,20 +445,49 @@ export interface DatasetRevisionDetail extends DatasetRevisionSummary {
   items: DatasetItem[];
 }
 
+export type DatasetRevisionChangeKind =
+  | "case_metadata"
+  | "input_content"
+  | "baseline_output"
+  | "expected_output"
+  | "expected_behavior"
+  | "tags";
+
+export interface DatasetRevisionDiffItem {
+  caseId: string;
+  status: "added" | "removed" | "changed" | "unchanged";
+  changes: DatasetRevisionChangeKind[];
+  baseline: DatasetItem | null;
+  candidate: DatasetItem | null;
+}
+
+export interface DatasetRevisionDiff {
+  datasetId: string;
+  baseline: DatasetRevisionSummary;
+  candidate: DatasetRevisionSummary;
+  addedCount: number;
+  removedCount: number;
+  changedCount: number;
+  unchangedCount: number;
+  items: DatasetRevisionDiffItem[];
+}
+
 export interface DatasetCreateRequest {
   name: string;
   description?: string;
 }
 
 export interface DatasetItemDraft {
-  traceId: string;
+  traceId?: string;
+  sourceRevisionItemId?: string;
   caseId?: string;
-  expectedOutput?: string;
-  expectedBehavior?: string;
+  expectedOutput?: string | null;
+  expectedBehavior?: string | null;
   tags?: string[];
 }
 
 export interface DatasetRevisionCreateRequest {
+  baseRevisionId?: string;
   note?: string;
   items: DatasetItemDraft[];
 }
@@ -395,6 +567,17 @@ export interface EvaluationCreateRequest {
   traceSelector: EvaluationTraceSelector;
 }
 
+export interface EvaluatorTemplate {
+  evaluatorId: string;
+  evaluator: EvaluatorDefinition;
+  createdBy: string;
+  createdAt: string;
+}
+
+export interface EvaluatorTemplateCreateRequest {
+  evaluator: EvaluatorDefinition;
+}
+
 export type EvaluationStatus =
   | "queued"
   | "running"
@@ -466,6 +649,7 @@ export interface JudgeCallSummary {
 }
 
 export interface EvaluationDetail extends EvaluationSummary {
+  evaluator: EvaluatorDefinition;
   traceSelector: EvaluationTraceSelector;
   cases: EvaluationCaseResult[];
 }

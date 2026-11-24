@@ -2,6 +2,7 @@ import type {
   DatasetCreateRequest,
   DatasetDetail,
   DatasetRevisionCreateRequest,
+  DatasetRevisionDiff,
   DatasetRevisionDetail,
   DatasetSummary,
 } from "@agent-ops/contracts";
@@ -26,6 +27,16 @@ export async function fetchDatasetRevision(
 ): Promise<DatasetRevisionDetail> {
   return getJson<DatasetRevisionDetail>(
     `/api/v1/datasets/${encodeURIComponent(datasetId)}/revisions/${encodeURIComponent(revisionId)}`,
+  );
+}
+
+export async function fetchDatasetRevisionDiff(
+  datasetId: string,
+  baselineRevisionId: string,
+  candidateRevisionId: string,
+): Promise<DatasetRevisionDiff> {
+  return getJson<DatasetRevisionDiff>(
+    `/api/v1/datasets/${encodeURIComponent(datasetId)}/revisions/${encodeURIComponent(baselineRevisionId)}/diff/${encodeURIComponent(candidateRevisionId)}`,
   );
 }
 

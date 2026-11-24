@@ -39,12 +39,16 @@ export interface TraceSpanView {
   type: SpanType;
   status: SpanStatus;
   depth: number;
+  startTime: string;
+  endTime: string;
   latencyMs: number;
   inputTokens?: number;
   outputTokens?: number;
   costMicros?: number;
   input: string;
   output: string;
+  inputDownloadable: boolean;
+  outputDownloadable: boolean;
   metadata: Record<string, string>;
 }
 
@@ -57,6 +61,7 @@ export interface TraceView {
   taskType: string;
   model: string;
   promptVersion: string;
+  evalCaseId: string | null;
   environment: string;
   status: TraceStatus;
   ingestState: string;

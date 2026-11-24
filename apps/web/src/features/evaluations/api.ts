@@ -3,12 +3,27 @@ import type {
   EvaluationComparison,
   EvaluationDetail,
   EvaluationSummary,
+  EvaluatorTemplate,
+  EvaluatorTemplateCreateRequest,
 } from "@agent-ops/contracts";
 
 import { getJson, postJson } from "../../shared/http.js";
 
 export async function fetchEvaluations(): Promise<EvaluationSummary[]> {
   return getJson<EvaluationSummary[]>("/api/v1/evaluations");
+}
+
+export async function fetchEvaluatorTemplates(): Promise<EvaluatorTemplate[]> {
+  return getJson<EvaluatorTemplate[]>("/api/v1/evaluators");
+}
+
+export async function createEvaluatorTemplate(
+  input: EvaluatorTemplateCreateRequest,
+): Promise<EvaluatorTemplate> {
+  return postJson<EvaluatorTemplate, EvaluatorTemplateCreateRequest>(
+    "/api/v1/evaluators",
+    input,
+  );
 }
 
 export async function fetchEvaluation(

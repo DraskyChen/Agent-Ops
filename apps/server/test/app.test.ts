@@ -60,6 +60,8 @@ describe("Agent Ops server", () => {
         traces: createTraceQueryService(
           {
             list,
+            listSessions: async () => [],
+            listBySession: async () => [],
             get: async () => null,
           },
           { now: () => new Date("2026-11-21T12:00:00.000Z") },
@@ -288,6 +290,12 @@ function testDependencies(
     }),
     traces: {
       list: async () => ({ items: [], nextCursor: null }),
+      listSessions: async () => ({
+        windowHours: 720,
+        generatedAt: "2026-11-24T10:00:00.000Z",
+        items: [],
+      }),
+      getSession: async () => null,
       get: async () => null,
     },
     ingest: {
@@ -308,10 +316,29 @@ function testDependencies(
       discard: async () => undefined,
       auditDenied: async () => undefined,
     },
+    candidates: {
+      list: async () => ({
+        windowHours: 720,
+        generatedAt: "2026-11-24T10:00:00.000Z",
+        counts: {
+          active: 0,
+          negativeFeedback: 0,
+          reviewOpen: 0,
+          runtimeFailure: 0,
+          evaluationFailed: 0,
+          evaluationBlocked: 0,
+          dismissed: 0,
+        },
+        items: [],
+      }),
+      dismiss: async (traceId) => ({ traceId, dismissed: true }),
+      restore: async (traceId) => ({ traceId, dismissed: false }),
+    },
     datasets: {
       list: async () => [],
       get: async () => null,
       getRevision: async () => null,
+      compareRevisions: async () => null,
       create: async () => {
         throw new Error("not configured");
       },
@@ -321,6 +348,13 @@ function testDependencies(
     },
     evaluations: {
       list: async () => [],
+      listEvaluators: async () => [],
+      createEvaluator: async (_principal, input) => ({
+        evaluatorId: "00000000-0000-4000-8000-000000000020",
+        evaluator: input.evaluator,
+        createdBy: "Reviewer One",
+        createdAt: "2026-11-24T10:00:00.000Z",
+      }),
       get: async () => null,
       create: async () => {
         throw new Error("not configured");
@@ -352,6 +386,42 @@ function testDependencies(
       ingestHealth: async () => {
         throw new Error("not configured");
       },
+    },
+    prompts: {
+      list: async () => ({
+        entries: [],
+        observedUnregistered: [],
+      }),
+      get: async () => null,
+      create: async (_principal, input) => ({
+        promptVersion: input.promptVersion,
+        name: input.name ?? input.promptVersion,
+        owner: input.owner ?? "Test Reviewer",
+        description: input.description ?? null,
+        status: input.status ?? "active",
+        traceCount: 0,
+        datasetCount: 0,
+        evaluationCount: 0,
+        lastSeenAt: null,
+        createdAt: "2026-11-24T10:00:00.000Z",
+        updatedAt: "2026-11-24T10:00:00.000Z",
+      }),
+      update: async (_principal, promptVersion, input) => ({
+        prompt: {
+          promptVersion,
+          name: input.name ?? "prompt",
+          owner: input.owner ?? null,
+          description: input.description ?? null,
+          status: input.status ?? "active",
+          traceCount: 0,
+          datasetCount: 0,
+          evaluationCount: 0,
+          lastSeenAt: null,
+          createdAt: "2026-11-24T10:00:00.000Z",
+          updatedAt: "2026-11-24T10:00:00.000Z",
+        },
+        history: [],
+      }),
     },
     authorizeIngest: () => true,
     ...overrides,

@@ -1,5 +1,6 @@
 import {
   CircleX,
+  CopyPlus,
   Database,
   FilePlus2,
   Layers3,
@@ -16,6 +17,9 @@ import type {
 } from "@agent-ops/contracts";
 
 import { Metric } from "../traces/TracePrimitives.js";
+import { fetchContentText } from "../../shared/content.js";
+import { DatasetItemPreview } from "./DatasetItemPreview.js";
+import { DatasetRevisionDiffPanel } from "./DatasetRevisionDiffPanel.js";
 import {
   createDataset,
   createDatasetRevision,
@@ -25,10 +29,12 @@ import {
 } from "./api.js";
 
 interface RevisionDraft {
+  sourceRevisionItemId?: string;
   traceId: string;
   caseId: string;
   expectedOutput: string;
   expectedBehavior: string;
+  tags: string[];
 }
 
 const EMPTY_ITEM: RevisionDraft = {
@@ -36,24 +42,44 @@ const EMPTY_ITEM: RevisionDraft = {
   caseId: "",
   expectedOutput: "",
   expectedBehavior: "",
+  tags: [],
 };
+
+export interface DatasetSelection {
+  datasetId: string;
+  revisionId?: string;
+  itemId?: string;
+}
 
 export function DatasetsPage({
   canManage,
+  initialSelection = null,
 }: {
   canManage: boolean;
+  initialSelection?: DatasetSelection | null;
 }) {
   const [datasets, setDatasets] = useState<DatasetSummary[]>([]);
-  const [selectedId, setSelectedId] = useState<string | null>(null);
+  const [selectedId, setSelectedId] = useState<string | null>(
+    initialSelection?.datasetId ?? null,
+  );
   const [detail, setDetail] = useState<DatasetDetail | null>(null);
   const [revision, setRevision] =
     useState<DatasetRevisionDetail | null>(null);
+  const [selectedRevisionId, setSelectedRevisionId] = useState<string | null>(
+    initialSelection?.revisionId ?? null,
+  );
+  const [selectedItemId, setSelectedItemId] = useState<string | null>(
+    initialSelection?.itemId ?? null,
+  );
   const [name, setName] = useState("");
   const [description, setDescription] = useState("");
   const [note, setNote] = useState("");
+  const [revisionBaseId, setRevisionBaseId] = useState<string | null>(null);
   const [items, setItems] = useState<RevisionDraft[]>([{ ...EMPTY_ITEM }]);
   const [loading, setLoading] = useState(true);
+  const [revisionLoading, setRevisionLoading] = useState(false);
   const [submitting, setSubmitting] = useState(false);
+  const [seedingRevision, setSeedingRevision] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   const loadList = async (preferredId?: string) => {
@@ -76,15 +102,49 @@ export function DatasetsPage({
     }
   };
 
-  const loadDetail = async (datasetId: string) => {
+  const loadRevision = async (datasetId: string, revisionId: string) => {
+    setRevisionLoading(true);
+    try {
+      const nextRevision = await fetchDatasetRevision(datasetId, revisionId);
+      setRevision(nextRevision);
+      setSelectedRevisionId(nextRevision.revisionId);
+      setSelectedItemId((current) =>
+        nextRevision.items.some((item) => item.itemId === current)
+          ? current
+          : nextRevision.items[0]?.itemId ?? null,
+      );
+      setError(null);
+    } catch (loadError) {
+      setRevision(null);
+      setSelectedItemId(null);
+      setError(message(loadError, "Unable to load dataset revision"));
+    } finally {
+      setRevisionLoading(false);
+    }
+  };
+
+  const loadDetail = async (
+    datasetId: string,
+    preferredRevisionId?: string,
+  ) => {
     try {
       const nextDetail = await fetchDataset(datasetId);
       setDetail(nextDetail);
-      const latest = nextDetail.revisions[0];
-      setRevision(
-        latest === undefined
-          ? null
-          : await fetchDatasetRevision(datasetId, latest.revisionId),
+      const nextRevision =
+        nextDetail.revisions.find(
+          (candidate) =>
+            candidate.revisionId ===
+            (preferredRevisionId ?? selectedRevisionId),
+        ) ?? nextDetail.revisions[0];
+      if (nextRevision === undefined) {
+        setRevision(null);
+        setSelectedRevisionId(null);
+        setSelectedItemId(null);
+        return;
+      }
+      await loadRevision(
+        datasetId,
+        nextRevision.revisionId,
       );
       setError(null);
     } catch (loadError) {
@@ -132,10 +192,15 @@ export function DatasetsPage({
     }
     setSubmitting(true);
     try {
-      await createDatasetRevision(selectedId, {
+      const created = await createDatasetRevision(selectedId, {
+        ...(revisionBaseId === null
+          ? {}
+          : { baseRevisionId: revisionBaseId }),
         note,
         items: items.map((item) => ({
-          traceId: item.traceId,
+          ...(item.sourceRevisionItemId === undefined
+            ? { traceId: item.traceId }
+            : { sourceRevisionItemId: item.sourceRevisionItemId }),
           ...(item.caseId.trim() === ""
             ? {}
             : { caseId: item.caseId }),
@@ -145,12 +210,14 @@ export function DatasetsPage({
           ...(item.expectedBehavior.trim() === ""
             ? {}
             : { expectedBehavior: item.expectedBehavior }),
+          tags: item.tags,
         })),
       });
       setNote("");
+      setRevisionBaseId(null);
       setItems([{ ...EMPTY_ITEM }]);
       await loadList(selectedId);
-      await loadDetail(selectedId);
+      await loadDetail(selectedId, created.revisionId);
     } catch (submitError) {
       setError(message(submitError, "Unable to create dataset revision"));
     } finally {
@@ -165,6 +232,41 @@ export function DatasetsPage({
       ),
     );
   };
+
+  const seedFromRevision = async () => {
+    if (revision === null) {
+      return;
+    }
+    setSeedingRevision(true);
+    try {
+      const drafts = await Promise.all(
+        revision.items.map(async (item): Promise<RevisionDraft> => ({
+          sourceRevisionItemId: item.itemId,
+          traceId: item.sourceTraceId,
+          caseId: item.caseId,
+          expectedOutput:
+            item.expectedOutputContentRef === null
+              ? ""
+              : await fetchContentText(item.expectedOutputContentRef),
+          expectedBehavior: item.expectedBehavior ?? "",
+          tags: item.tags,
+        })),
+      );
+      setItems(drafts);
+      setRevisionBaseId(revision.revisionId);
+      setNote(`Derived from revision ${revision.revision}`);
+      setError(null);
+    } catch (seedError) {
+      setError(
+        message(seedError, "Unable to prepare the next dataset revision"),
+      );
+    } finally {
+      setSeedingRevision(false);
+    }
+  };
+
+  const selectedItem =
+    revision?.items.find((item) => item.itemId === selectedItemId) ?? null;
 
   return (
     <div className="page">
@@ -210,10 +312,12 @@ export function DatasetsPage({
         />
         <Metric
           icon={<FilePlus2 size={16} />}
-          label="Latest cases"
+          label="Selected cases"
           value={(revision?.items.length ?? 0).toLocaleString()}
           detail={
-            revision === null ? "no revision yet" : `revision ${revision.revision}`
+            revision === null
+              ? "no revision selected"
+              : `revision ${revision.revision}`
           }
         />
       </section>
@@ -237,7 +341,12 @@ export function DatasetsPage({
                   }`}
                   type="button"
                   key={dataset.datasetId}
-                  onClick={() => setSelectedId(dataset.datasetId)}
+                  onClick={() => {
+                    setSelectedId(dataset.datasetId);
+                    setItems([{ ...EMPTY_ITEM }]);
+                    setRevisionBaseId(null);
+                    setNote("");
+                  }}
                 >
                   <span>
                     <strong>{dataset.name}</strong>
@@ -307,10 +416,63 @@ export function DatasetsPage({
                   <h2>{detail.name}</h2>
                   <p>{detail.description ?? "No description"}</p>
                 </div>
-                <span className="demo-badge">
-                  {detail.revisions.length} revisions
-                </span>
+                <div className="dataset-revision-control">
+                  <label>
+                    <span>Revision history</span>
+                    <select
+                      value={selectedRevisionId ?? ""}
+                      onChange={(event) => {
+                        const revisionId = event.target.value;
+                        if (selectedId !== null && revisionId !== "") {
+                          if (
+                            items.some(
+                              (item) =>
+                                item.sourceRevisionItemId !== undefined,
+                            )
+                          ) {
+                            setItems([{ ...EMPTY_ITEM }]);
+                            setRevisionBaseId(null);
+                            setNote("");
+                          }
+                          void loadRevision(selectedId, revisionId);
+                        }
+                      }}
+                      disabled={detail.revisions.length === 0 || revisionLoading}
+                    >
+                      {detail.revisions.map((candidate) => (
+                        <option
+                          key={candidate.revisionId}
+                          value={candidate.revisionId}
+                        >
+                          Revision {candidate.revision} · {candidate.itemCount} cases
+                        </option>
+                      ))}
+                    </select>
+                  </label>
+                  <span className="demo-badge">
+                    {detail.revisions.length} revisions
+                  </span>
+                  <button
+                    className="button secondary compact"
+                    type="button"
+                    onClick={() => void seedFromRevision()}
+                    disabled={
+                      revision === null ||
+                      revision.items.length === 0 ||
+                      revisionLoading ||
+                      seedingRevision
+                    }
+                  >
+                    <CopyPlus size={13} />
+                    {seedingRevision ? "Preparing…" : "Use as next revision"}
+                  </button>
+                </div>
               </div>
+
+              <DatasetRevisionDiffPanel
+                datasetId={detail.datasetId}
+                revisions={detail.revisions}
+              />
 
               {canManage ? (
                 <form
@@ -320,7 +482,9 @@ export function DatasetsPage({
                   <div className="form-heading">
                     <strong>Create immutable revision</strong>
                     <small>
-                      Traces must be sealed and contain captured input/output
+                      {revisionBaseId === null
+                        ? "Traces must be sealed and contain captured input/output"
+                        : "Cases are derived from the selected immutable revision"}
                     </small>
                   </div>
                   <Field label="Revision note">
@@ -363,7 +527,10 @@ export function DatasetsPage({
                                   traceId: event.target.value,
                                 })
                               }
-                              required
+                              required={item.sourceRevisionItemId === undefined}
+                              disabled={
+                                item.sourceRevisionItemId !== undefined
+                              }
                             />
                           </Field>
                           <Field label="Case ID">
@@ -434,11 +601,13 @@ export function DatasetsPage({
               <section className="entity-table">
                 <div className="panel-heading">
                   <div>
-                    <strong>Latest revision items</strong>
+                    <strong>Revision items</strong>
                     <small>
                       {revision === null
                         ? "No revision"
-                        : `Revision ${revision.revision} · ${revision.items.length} cases`}
+                        : `Revision ${revision.revision} · ${revision.items.length} cases${
+                            revision.note === null ? "" : ` · ${revision.note}`
+                          }`}
                     </small>
                   </div>
                 </div>
@@ -447,9 +616,16 @@ export function DatasetsPage({
                     Add sealed traces to create the first revision.
                   </p>
                 ) : (
-                  <div className="case-list">
+                  <div className="case-list dataset-case-list">
                     {revision.items.map((item) => (
-                      <article key={item.itemId}>
+                      <button
+                        className={
+                          item.itemId === selectedItemId ? "active" : ""
+                        }
+                        key={item.itemId}
+                        type="button"
+                        onClick={() => setSelectedItemId(item.itemId)}
+                      >
                         <div>
                           <strong>{item.caseId}</strong>
                           <small>
@@ -463,11 +639,15 @@ export function DatasetsPage({
                             ? "Behavior only"
                             : "Expected output"}
                         </span>
-                      </article>
+                      </button>
                     ))}
                   </div>
                 )}
               </section>
+
+              {selectedItem === null ? null : (
+                <DatasetItemPreview item={selectedItem} />
+              )}
             </>
           )}
         </div>

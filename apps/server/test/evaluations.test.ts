@@ -96,6 +96,42 @@ describe("evaluation service", () => {
     ).toThrow(EvaluationValidationError);
   });
 
+  it("lists and creates normalized evaluator templates", async () => {
+    const template = {
+      evaluatorId: "00000000-0000-4000-8000-000000000020",
+      evaluator: {
+        name: "contains-refund",
+        version: 1,
+        kind: "contains" as const,
+        config: { value: "refund" },
+      },
+      createdBy: "Reviewer One",
+      createdAt: "2026-11-24T10:00:00.000Z",
+    };
+    const listEvaluators = vi.fn().mockResolvedValue([template]);
+    const createEvaluator = vi.fn().mockResolvedValue(template);
+    const evaluations = createEvaluationService(
+      repository({ listEvaluators, createEvaluator }),
+    );
+
+    await expect(evaluations.listEvaluators()).resolves.toEqual([template]);
+    await evaluations.createEvaluator(principal, {
+      evaluator: {
+        name: " contains-refund ",
+        version: 1,
+        kind: "contains",
+        config: { value: " refund " },
+      },
+    });
+
+    expect(createEvaluator).toHaveBeenCalledWith(principal, {
+      name: "contains-refund",
+      version: 1,
+      kind: "contains",
+      config: { value: "refund" },
+    });
+  });
+
   it("delegates run creation with the requesting principal", async () => {
     const create = vi.fn().mockResolvedValue(evaluationDetail());
     const evaluations = createEvaluationService(
@@ -228,6 +264,13 @@ function repository(
 ): EvaluationRepository {
   return {
     list: async () => [],
+    listEvaluators: async () => [],
+    createEvaluator: async (_principal, evaluator) => ({
+      evaluatorId: "00000000-0000-4000-8000-000000000020",
+      evaluator,
+      createdBy: "Reviewer One",
+      createdAt: "2026-11-24T10:00:00.000Z",
+    }),
     get: async () => null,
     create: async () => evaluationDetail(),
     cancel: async () => evaluationDetail(),
@@ -268,6 +311,12 @@ function baseEvaluationDetail() {
     evaluatorName: "exact",
     evaluatorVersion: 1,
     evaluatorKind: "exact" as const,
+    evaluator: {
+      name: "exact",
+      version: 1,
+      kind: "exact" as const,
+      config: {},
+    },
     candidateAppName: "refund-agent" as string | null,
     candidatePromptVersion: "refund-v2" as string | null,
     status: "queued" as

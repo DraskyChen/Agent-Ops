@@ -162,7 +162,13 @@ describe.skipIf(!enabled)("operational review integration", () => {
     await app?.close();
     if (pool !== undefined) {
       const cleanupObjectKeys: string[] = [];
-      await pool.query("delete from feedback where trace_id = $1", [traceId]);
+      await pool.query(
+        "delete from feedback where trace_id = any($1::text[])",
+        [[traceId, candidateTraceId]],
+      );
+      await pool.query(
+        "delete from prompt_registry where prompt_version like 'integration-prompt-%'",
+      );
       await pool.query("delete from traces where trace_id = $1", [traceId]);
       const evaluationIds = [
         evaluationId,
@@ -170,6 +176,39 @@ describe.skipIf(!enabled)("operational review integration", () => {
         judgeEvaluationId,
       ].filter(
         (id): id is string => id !== undefined,
+      );
+      const datasetContent =
+        datasetId === undefined
+          ? { rows: [] }
+          : await pool.query<{ content_id: string; object_key: string }>(
+              `select distinct c.content_id::text, c.object_key
+               from dataset_revisions r
+               join dataset_items i on i.dataset_revision_id = r.id
+               cross join lateral (
+                 values (i.input_content_ref),
+                   (i.baseline_output_content_ref),
+                   (i.expected_output_content_ref)
+               ) refs(content_id)
+               join content_objects c on c.content_id::text = refs.content_id
+               where r.dataset_id = $1`,
+              [datasetId],
+            );
+      const judgeContent =
+        evaluationIds.length === 0
+          ? { rows: [] }
+          : await pool.query<{ content_id: string; object_key: string }>(
+              `select distinct c.content_id::text, c.object_key
+               from judge_calls j
+               cross join lateral (
+                 values (j.prompt_content_ref), (j.response_content_ref)
+               ) refs(content_id)
+               join content_objects c on c.content_id::text = refs.content_id
+               where j.evaluation_run_id = any($1::uuid[])`,
+              [evaluationIds],
+            );
+      cleanupObjectKeys.push(
+        ...datasetContent.rows.map((row) => row.object_key),
+        ...judgeContent.rows.map((row) => row.object_key),
       );
       for (const id of evaluationIds) {
         await pool.query("delete from evaluation_runs where id = $1", [id]);
@@ -180,28 +219,22 @@ describe.skipIf(!enabled)("operational review integration", () => {
         );
       }
       if (datasetId !== undefined) {
-        const copied = await pool.query<{ object_key: string }>(
-          "select object_key from content_objects where owner_app = $1",
-          ["agent-ops-datasets"],
-        );
-        cleanupObjectKeys.push(...copied.rows.map((row) => row.object_key));
         await pool.query("delete from datasets where id = $1", [datasetId]);
+      }
+      const createdContentIds = [
+        ...datasetContent.rows.map((row) => row.content_id),
+        ...judgeContent.rows.map((row) => row.content_id),
+      ];
+      if (createdContentIds.length > 0) {
         await pool.query(
-          "delete from content_objects where owner_app = $1",
-          ["agent-ops-datasets"],
+          "delete from content_access_log where content_id = any($1::uuid[])",
+          [createdContentIds],
+        );
+        await pool.query(
+          "delete from content_objects where content_id = any($1::uuid[])",
+          [createdContentIds],
         );
       }
-      const judgeContent = await pool.query<{ object_key: string }>(
-        "select object_key from content_objects where owner_app = $1",
-        ["agent-ops-evaluation"],
-      );
-      cleanupObjectKeys.push(
-        ...judgeContent.rows.map((row) => row.object_key),
-      );
-      await pool.query(
-        "delete from content_objects where owner_app = $1",
-        ["agent-ops-evaluation"],
-      );
       const sourceContent = await pool.query<{ object_key: string }>(
         "select object_key from content_objects where content_id = any($1::uuid[])",
         [datasetContentIds],
@@ -449,6 +482,41 @@ describe.skipIf(!enabled)("operational review integration", () => {
       revisions: [{ revision: 1, itemCount: 1 }],
     });
 
+    const derivedRevision = await app.inject({
+      method: "POST",
+      url: `/api/v1/datasets/${datasetId}/revisions`,
+      payload: {
+        baseRevisionId: revisionBody.revisionId,
+        note: "Updated expected output",
+        items: [
+          {
+            sourceRevisionItemId: item.itemId,
+            expectedOutput: "Refund completed with updated guidance",
+          },
+        ],
+      },
+    });
+    expect(derivedRevision.statusCode).toBe(201);
+    const derivedRevisionBody = derivedRevision.json() as DatasetRevisionDetail;
+    const revisionDiff = await app.inject({
+      method: "GET",
+      url: `/api/v1/datasets/${datasetId}/revisions/${revisionBody.revisionId}/diff/${derivedRevisionBody.revisionId}`,
+    });
+    expect(revisionDiff.statusCode).toBe(200);
+    expect(revisionDiff.json()).toMatchObject({
+      addedCount: 0,
+      removedCount: 0,
+      changedCount: 1,
+      unchangedCount: 0,
+      items: [
+        {
+          caseId: "refund-case-integration",
+          status: "changed",
+          changes: ["expected_output"],
+        },
+      ],
+    });
+
     const candidateContent = await app.inject({
       method: "POST",
       url: "/api/v1/content",
@@ -557,6 +625,143 @@ describe.skipIf(!enabled)("operational review integration", () => {
         }),
       ]),
     );
+    const templateName = `template-integration-${randomUUID()}`;
+    const templateResponse = await app.inject({
+      method: "POST",
+      url: "/api/v1/evaluators",
+      payload: {
+        evaluator: {
+          name: templateName,
+          version: 1,
+          kind: "contains",
+          config: { value: "refund", ignoreCase: true },
+        },
+      },
+    });
+    expect(templateResponse.statusCode).toBe(201);
+    expect(templateResponse.json()).toMatchObject({
+      evaluator: {
+        name: templateName,
+        version: 1,
+        kind: "contains",
+        config: { value: "refund", ignoreCase: true },
+      },
+    });
+    const listedTemplates = await app.inject({
+      method: "GET",
+      url: "/api/v1/evaluators",
+    });
+    expect(listedTemplates.statusCode).toBe(200);
+    expect(listedTemplates.json()).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          evaluator: expect.objectContaining({ name: templateName }),
+        }),
+      ]),
+    );
+    const promptVersion = `integration-prompt-${randomUUID()}`;
+    const registerPrompt = await app.inject({
+      method: "POST",
+      url: "/api/v1/prompts",
+      payload: {
+        promptVersion,
+        name: "Integration prompt",
+        owner: "Integration Reviewer",
+        description: "Prompt registry integration test",
+      },
+    });
+    expect(registerPrompt.statusCode).toBe(201);
+    expect(registerPrompt.json()).toMatchObject({
+      promptVersion,
+      name: "Integration prompt",
+      owner: "Integration Reviewer",
+      status: "active",
+    });
+    const promptRegistry = await app.inject({
+      method: "GET",
+      url: "/api/v1/prompts",
+    });
+    expect(promptRegistry.statusCode).toBe(200);
+    expect(promptRegistry.json()).toMatchObject({
+      entries: expect.arrayContaining([
+        expect.objectContaining({ promptVersion }),
+      ]),
+    });
+    const updatePrompt = await app.inject({
+      method: "PATCH",
+      url: `/api/v1/prompts/${promptVersion}`,
+      payload: {
+        owner: null,
+        description: "Deprecated during integration test",
+        status: "deprecated",
+      },
+    });
+    expect(updatePrompt.statusCode).toBe(200);
+    expect(updatePrompt.json()).toMatchObject({
+      prompt: {
+        promptVersion,
+        owner: null,
+        description: "Deprecated during integration test",
+        status: "deprecated",
+      },
+      history: [
+        expect.objectContaining({
+          eventType: "updated",
+          actor: "Integration Reviewer",
+        }),
+        expect.objectContaining({ eventType: "created" }),
+      ],
+    });
+    await pool.query(
+      `insert into feedback (trace_id, event_id, type, comment)
+       values ($1, $2, 'thumbs_down', 'integration candidate')`,
+      [candidateTraceId, `candidate-${randomUUID()}`],
+    );
+    const candidates = await app.inject({
+      method: "GET",
+      url: "/api/v1/candidates",
+    });
+    expect(candidates.statusCode).toBe(200);
+    const candidateBody = candidates.json() as {
+      counts: { active: number; negativeFeedback: number };
+      items: Array<{
+        traceId: string;
+        reasons: string[];
+        datasetCount: number;
+        datasetEligible: boolean;
+        dismissedAt: string | null;
+      }>;
+    };
+    expect(candidateBody.counts.active).toBeGreaterThanOrEqual(1);
+    expect(candidateBody.counts.negativeFeedback).toBeGreaterThanOrEqual(1);
+    expect(
+      candidateBody.items.find((item) => item.traceId === candidateTraceId),
+    ).toMatchObject({
+      reasons: expect.arrayContaining(["negative_feedback"]),
+      datasetCount: 0,
+      datasetEligible: false,
+      dismissedAt: null,
+    });
+    const dismissed = await app.inject({
+      method: "POST",
+      url: `/api/v1/candidates/${candidateTraceId}/dismiss`,
+      payload: { reason: "integration review" },
+    });
+    expect(dismissed.statusCode).toBe(200);
+    expect(dismissed.json()).toEqual({
+      traceId: candidateTraceId,
+      dismissed: true,
+    });
+    const restored = await app.inject({
+      method: "POST",
+      url: `/api/v1/candidates/${candidateTraceId}/restore`,
+      payload: {},
+    });
+    expect(restored.statusCode).toBe(200);
+    expect(restored.json()).toEqual({
+      traceId: candidateTraceId,
+      dismissed: false,
+    });
     const evaluationWorker = createEvaluationWorker(
       createPostgresEvaluationWorkerStore(
         pool,
@@ -591,6 +796,12 @@ describe.skipIf(!enabled)("operational review integration", () => {
       passedCases: 1,
       failedCases: 0,
       averageScore: 1,
+      evaluator: {
+        name: exactEvaluatorName,
+        version: 1,
+        kind: "exact",
+        config: {},
+      },
       cases: [
         {
           caseId: "refund-case-integration",

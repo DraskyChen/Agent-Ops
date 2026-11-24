@@ -59,6 +59,18 @@ Implemented:
   content consent, prompt/response auditing, token usage, and validation retry.
 - Two-run comparison over the same dataset revision and evaluator version,
   including pass rate, score, cost, P95 latency, and per-case deltas.
+- Manual Trace-to-dataset curation, revision history, side-by-side content,
+  and immutable revision diffs.
+- Reusable evaluator templates, configuration replay, Trace/Dataset result
+  links, and audited Judge prompt/response inspection.
+- Candidate discovery from negative feedback, unresolved reviews, runtime
+  failures, and failed evaluations, with manual dismiss/restore decisions.
+- Trace waterfalls, Span search and error filtering, shareable Trace links,
+  a Session directory, and per-session run timelines.
+- A read-only Prompt Registry with lifecycle metadata, append-only audit
+  history, and Trace/Dataset/Evaluation association counts.
+- Copy and download actions for fully captured Trace content, with an
+  access-audit and retention warning before download.
 - A single-team production Compose file, multi-stage application image, Nginx
   reverse proxy, and automatic migration service. Image build verification
   still requires Docker Hub connectivity.

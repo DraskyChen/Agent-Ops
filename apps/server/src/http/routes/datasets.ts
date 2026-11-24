@@ -10,6 +10,7 @@ import {
   DatasetCaseConflictError,
   DatasetNameConflictError,
   DatasetNotFoundError,
+  DatasetRevisionUnavailableError,
   DatasetTraceUnavailableError,
   DatasetValidationError,
   type DatasetService,
@@ -92,6 +93,38 @@ export function registerDatasetRoutes(
     },
   );
 
+  app.get<{
+    Params: {
+      datasetId: string;
+      baselineRevisionId: string;
+      candidateRevisionId: string;
+    };
+  }>(
+    "/api/v1/datasets/:datasetId/revisions/:baselineRevisionId/diff/:candidateRevisionId",
+    async (request, reply) => {
+      const principal = await requirePrincipal(humanAuth, request, reply);
+      if (principal === null) {
+        return;
+      }
+      try {
+        const diff = await datasets.compareRevisions(
+          request.params.datasetId,
+          request.params.baselineRevisionId,
+          request.params.candidateRevisionId,
+        );
+        if (diff === null) {
+          return reply.code(404).send({
+            code: "DATASET_REVISION_NOT_FOUND",
+            message: "One or both dataset revisions were not found",
+          } satisfies ApiErrorResponse);
+        }
+        return diff;
+      } catch (error) {
+        return sendDatasetError(reply, error);
+      }
+    },
+  );
+
   app.post<{
     Params: { datasetId: string };
     Body: DatasetRevisionCreateRequest;
@@ -135,6 +168,12 @@ function sendDatasetError(
   if (error instanceof DatasetTraceUnavailableError) {
     return reply.code(422).send({
       code: "DATASET_TRACE_UNAVAILABLE",
+      message: error.message,
+    } satisfies ApiErrorResponse);
+  }
+  if (error instanceof DatasetRevisionUnavailableError) {
+    return reply.code(422).send({
+      code: "DATASET_REVISION_UNAVAILABLE",
       message: error.message,
     } satisfies ApiErrorResponse);
   }

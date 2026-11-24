@@ -43,6 +43,25 @@ export async function postJson<Response, Body>(
   return (await response.json()) as Response;
 }
 
+export async function patchJson<Response, Body>(
+  path: string,
+  body: Body,
+): Promise<Response> {
+  const response = await fetch(path, {
+    method: "PATCH",
+    headers: {
+      accept: "application/json",
+      "content-type": "application/json",
+    },
+    credentials: "same-origin",
+    body: JSON.stringify(body),
+  });
+  if (!response.ok) {
+    throw await responseError(response, path);
+  }
+  return (await response.json()) as Response;
+}
+
 export async function getText(path: string): Promise<string> {
   const response = await fetch(path, {
     headers: {

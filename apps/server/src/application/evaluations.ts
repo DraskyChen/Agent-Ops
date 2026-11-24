@@ -6,6 +6,8 @@ import type {
   EvaluationSummary,
   EvaluationTraceSelector,
   EvaluatorDefinition,
+  EvaluatorTemplate,
+  EvaluatorTemplateCreateRequest,
   LlmJudgeDefinition,
 } from "@agent-ops/contracts";
 
@@ -28,6 +30,11 @@ export interface NormalizedEvaluationCreate {
 
 export interface EvaluationRepository {
   list(): Promise<EvaluationSummary[]>;
+  listEvaluators(): Promise<EvaluatorTemplate[]>;
+  createEvaluator(
+    principal: HumanPrincipal,
+    evaluator: EvaluatorDefinition,
+  ): Promise<EvaluatorTemplate>;
   get(evaluationId: string): Promise<EvaluationDetail | null>;
   create(
     principal: HumanPrincipal,
@@ -38,6 +45,11 @@ export interface EvaluationRepository {
 
 export interface EvaluationService {
   list(): Promise<EvaluationSummary[]>;
+  listEvaluators(): Promise<EvaluatorTemplate[]>;
+  createEvaluator(
+    principal: HumanPrincipal,
+    input: EvaluatorTemplateCreateRequest,
+  ): Promise<EvaluatorTemplate>;
   get(evaluationId: string): Promise<EvaluationDetail | null>;
   create(
     principal: HumanPrincipal,
@@ -115,6 +127,19 @@ export function createEvaluationService(
       return repository.list();
     },
 
+    listEvaluators() {
+      return repository.listEvaluators();
+    },
+
+    createEvaluator(principal, input) {
+      if (typeof input !== "object" || input === null) {
+        throw new EvaluationValidationError("Request body must be an object");
+      }
+      const evaluator = normalizeEvaluator(input.evaluator);
+      assertEvaluatorAllowed(principal, evaluator, judgeEnabled);
+      return repository.createEvaluator(principal, evaluator);
+    },
+
     get(evaluationId) {
       if (!UUID_PATTERN.test(evaluationId)) {
         return Promise.resolve(null);
@@ -126,18 +151,7 @@ export function createEvaluationService(
       if (typeof input !== "object" || input === null) {
         throw new EvaluationValidationError("Request body must be an object");
       }
-      if (input.evaluator?.kind === "llm_judge") {
-        if (!judgeEnabled) {
-          throw new EvaluationValidationError(
-            "LLM Judge is disabled for this deployment",
-          );
-        }
-        if (principal.role !== "admin") {
-          throw new EvaluationPermissionError(
-            "Administrator access is required for LLM Judge",
-          );
-        }
-      }
+      assertEvaluatorAllowed(principal, input.evaluator, judgeEnabled);
       return repository.create(
         principal,
         normalizeEvaluationCreate(input, now()),
@@ -250,6 +264,26 @@ export function createEvaluationService(
       };
     },
   };
+}
+
+function assertEvaluatorAllowed(
+  principal: HumanPrincipal,
+  evaluator: EvaluatorDefinition,
+  judgeEnabled: boolean,
+): void {
+  if (evaluator?.kind !== "llm_judge") {
+    return;
+  }
+  if (!judgeEnabled) {
+    throw new EvaluationValidationError(
+      "LLM Judge is disabled for this deployment",
+    );
+  }
+  if (principal.role !== "admin") {
+    throw new EvaluationPermissionError(
+      "Administrator access is required for LLM Judge",
+    );
+  }
 }
 
 function summaryOnly(evaluation: EvaluationDetail): EvaluationSummary {

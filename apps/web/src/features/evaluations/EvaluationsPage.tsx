@@ -2,14 +2,18 @@ import {
   CircleCheck,
   CircleX,
   Clock3,
+  CopyPlus,
+  FileText,
   FlaskConical,
   ListChecks,
   Play,
   RefreshCw,
+  ShieldCheck,
   Square,
   Target,
+  X,
 } from "lucide-react";
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 
 import type {
   DatasetDetail,
@@ -19,15 +23,19 @@ import type {
   EvaluationStatus,
   EvaluationSummary,
   EvaluatorDefinition,
+  EvaluatorTemplate,
 } from "@agent-ops/contracts";
 
 import { fetchDataset, fetchDatasets } from "../datasets/api.js";
+import { fetchContentText } from "../../shared/content.js";
 import { Metric } from "../traces/TracePrimitives.js";
 import {
   cancelEvaluation,
   createEvaluation,
+  createEvaluatorTemplate,
   fetchEvaluation,
   fetchEvaluationComparison,
+  fetchEvaluatorTemplates,
   fetchEvaluations,
 } from "./api.js";
 
@@ -48,11 +56,22 @@ const EVALUATOR_OPTIONS: Array<{
 export function EvaluationsPage({
   canManage,
   canJudge,
+  onOpenTrace,
+  onOpenDatasetItem,
 }: {
   canManage: boolean;
   canJudge: boolean;
+  onOpenTrace: (traceId: string) => void;
+  onOpenDatasetItem: (selection: {
+    datasetId: string;
+    revisionId: string;
+    itemId: string;
+  }) => void;
 }) {
   const [evaluations, setEvaluations] = useState<EvaluationSummary[]>([]);
+  const [evaluatorTemplates, setEvaluatorTemplates] = useState<
+    EvaluatorTemplate[]
+  >([]);
   const [datasets, setDatasets] = useState<DatasetSummary[]>([]);
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [detail, setDetail] = useState<EvaluationDetail | null>(null);
@@ -77,11 +96,19 @@ export function EvaluationsPage({
   const [configValue, setConfigValue] = useState("");
   const [appName, setAppName] = useState("");
   const [promptVersion, setPromptVersion] = useState("");
+  const [serviceVersion, setServiceVersion] = useState("");
   const [environment, setEnvironment] = useState("test");
   const [timeRange, setTimeRange] = useState("24");
   const [loading, setLoading] = useState(true);
   const [submitting, setSubmitting] = useState(false);
+  const [savingTemplate, setSavingTemplate] = useState(false);
+  const [selectedTemplateId, setSelectedTemplateId] = useState("");
+  const [templateNotice, setTemplateNotice] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [auditCase, setAuditCase] =
+    useState<EvaluationDetail["cases"][number] | null>(null);
+  const formRef = useRef<HTMLFormElement>(null);
+  const preferredRevisionRef = useRef<string | null>(null);
 
   const loadEvaluations = async (preferredId?: string) => {
     setLoading(true);
@@ -139,6 +166,11 @@ export function EvaluationsPage({
         .catch((loadError: unknown) => {
           setError(message(loadError, "Unable to load datasets"));
         }),
+      fetchEvaluatorTemplates()
+        .then(setEvaluatorTemplates)
+        .catch((loadError: unknown) => {
+          setError(message(loadError, "Unable to load evaluator templates"));
+        }),
     ]);
   }, []);
 
@@ -173,7 +205,15 @@ export function EvaluationsPage({
     void fetchDataset(datasetId)
       .then((next) => {
         setDatasetDetail(next);
-        setRevisionId(next.revisions[0]?.revisionId ?? "");
+        const preferredRevision = preferredRevisionRef.current;
+        preferredRevisionRef.current = null;
+        setRevisionId(
+          next.revisions.some(
+            (revision) => revision.revisionId === preferredRevision,
+          )
+            ? (preferredRevision as string)
+            : next.revisions[0]?.revisionId ?? "",
+        );
       })
       .catch((loadError: unknown) => {
         setError(message(loadError, "Unable to load dataset revisions"));
@@ -207,6 +247,9 @@ export function EvaluationsPage({
           ...(promptVersion.trim() === ""
             ? {}
             : { promptVersion: promptVersion.trim() }),
+          ...(serviceVersion.trim() === ""
+            ? {}
+            : { serviceVersion: serviceVersion.trim() }),
           ...(environment === "all"
             ? {}
             : {
@@ -253,6 +296,97 @@ export function EvaluationsPage({
     } catch (compareError) {
       setComparison(null);
       setError(message(compareError, "Unable to compare evaluations"));
+    }
+  };
+
+  const applyEvaluatorDefinition = (evaluator: EvaluatorDefinition) => {
+    setEvaluatorName(evaluator.name);
+    setEvaluatorVersion(String(evaluator.version));
+    setEvaluatorKind(evaluator.kind);
+    setConfigValue(evaluatorConfigValue(evaluator));
+    setJudgeModel(
+      evaluator.kind === "llm_judge"
+        ? evaluator.config.model
+        : "deepseek-flash",
+    );
+    setJudgeRubric(
+      evaluator.kind === "llm_judge"
+        ? evaluator.config.rubric
+        : "Pass only when the candidate output fully satisfies the user request and is grounded in the available evidence.",
+    );
+    setAllowExternalContent(false);
+  };
+
+  const saveEvaluatorTemplate = async () => {
+    setSavingTemplate(true);
+    try {
+      const created = await createEvaluatorTemplate({
+        evaluator: evaluatorFromForm({
+          name: evaluatorName,
+          version: evaluatorVersion,
+          kind: evaluatorKind,
+          configValue,
+          judgeModel,
+          judgeRubric,
+          allowExternalContent,
+          requireExternalConsent: false,
+        }),
+      });
+      const next = await fetchEvaluatorTemplates();
+      setEvaluatorTemplates(next);
+      setSelectedTemplateId(created.evaluatorId);
+      setTemplateNotice(
+        `Saved ${created.evaluator.name} v${created.evaluator.version}`,
+      );
+      setError(null);
+    } catch (saveError) {
+      setTemplateNotice(null);
+      setError(
+        message(saveError, "Unable to save evaluator template"),
+      );
+    } finally {
+      setSavingTemplate(false);
+    }
+  };
+
+  const reuseConfiguration = async () => {
+    if (detail === null) {
+      return;
+    }
+    try {
+      const nextDataset = await fetchDataset(detail.datasetId);
+      const evaluator = detail.evaluator;
+      applyEvaluatorDefinition(evaluator);
+      setSelectedTemplateId("");
+      setTemplateNotice(null);
+      setAppName(detail.traceSelector.appName ?? "");
+      setPromptVersion(detail.traceSelector.promptVersion ?? "");
+      setServiceVersion(detail.traceSelector.serviceVersion ?? "");
+      setEnvironment(detail.traceSelector.environment ?? "all");
+      setTimeRange(
+        selectorTimeRange(
+          detail.traceSelector.startedAfter,
+          detail.traceSelector.startedBefore,
+        ),
+      );
+      if (detail.datasetId !== datasetId) {
+        preferredRevisionRef.current = detail.datasetRevisionId;
+        setDatasetId(detail.datasetId);
+      } else {
+        setDatasetDetail(nextDataset);
+        setRevisionId(detail.datasetRevisionId);
+      }
+      setError(null);
+      window.setTimeout(
+        () =>
+          formRef.current?.scrollIntoView({
+            behavior: "smooth",
+            block: "start",
+          }),
+        0,
+      );
+    } catch (reuseError) {
+      setError(message(reuseError, "Unable to reuse evaluation configuration"));
     }
   };
 
@@ -402,7 +536,11 @@ export function EvaluationsPage({
           </div>
 
           {canManage ? (
-            <form className="entity-form compact-form" onSubmit={submit}>
+            <form
+              className="entity-form compact-form"
+              ref={formRef}
+              onSubmit={submit}
+            >
               <div className="form-heading">
                 <strong>Run evaluation</strong>
                 <small>Candidate traces must carry a matching case ID</small>
@@ -430,6 +568,36 @@ export function EvaluationsPage({
                   {(datasetDetail?.revisions ?? []).map((revision) => (
                     <option key={revision.revisionId} value={revision.revisionId}>
                       Revision {revision.revision} · {revision.itemCount} cases
+                    </option>
+                  ))}
+                </select>
+              </Field>
+              <Field label="Saved evaluator">
+                <select
+                  value={selectedTemplateId}
+                  onChange={(event) => {
+                    const evaluatorId = event.target.value;
+                    setSelectedTemplateId(evaluatorId);
+                    const template = evaluatorTemplates.find(
+                      (candidate) =>
+                        candidate.evaluatorId === evaluatorId,
+                    );
+                    if (template !== undefined) {
+                      applyEvaluatorDefinition(template.evaluator);
+                      setTemplateNotice(
+                        `Loaded ${template.evaluator.name} v${template.evaluator.version}`,
+                      );
+                    }
+                  }}
+                >
+                  <option value="">Select saved evaluator</option>
+                  {evaluatorTemplates.map((template) => (
+                    <option
+                      key={template.evaluatorId}
+                      value={template.evaluatorId}
+                    >
+                      {template.evaluator.name} v{template.evaluator.version} ·{" "}
+                      {template.evaluator.kind}
                     </option>
                   ))}
                 </select>
@@ -533,6 +701,28 @@ export function EvaluationsPage({
                   />
                 </Field>
               ) : null}
+              {canManage ? (
+                <div className="evaluator-template-actions">
+                  <button
+                    className="button secondary compact"
+                    type="button"
+                    onClick={() => void saveEvaluatorTemplate()}
+                    disabled={
+                      savingTemplate ||
+                      evaluatorName.trim() === "" ||
+                      !Number.isInteger(Number(evaluatorVersion)) ||
+                      Number(evaluatorVersion) <= 0
+                    }
+                  >
+                    {savingTemplate
+                      ? "Saving template…"
+                      : "Save current evaluator"}
+                  </button>
+                  {templateNotice === null ? null : (
+                    <span>{templateNotice}</span>
+                  )}
+                </div>
+              ) : null}
               <div className="entity-form-row">
                 <Field label="Application">
                   <input
@@ -549,6 +739,13 @@ export function EvaluationsPage({
                   />
                 </Field>
               </div>
+              <Field label="Service version">
+                <input
+                  value={serviceVersion}
+                  onChange={(event) => setServiceVersion(event.target.value)}
+                  placeholder="Any service version"
+                />
+              </Field>
               <div className="entity-form-row">
                 <Field label="Environment">
                   <select
@@ -612,7 +809,19 @@ export function EvaluationsPage({
                     {detail.evaluatorKind}
                   </p>
                 </div>
-                <StatusBadge status={detail.status} />
+                <div className="evaluation-header-actions">
+                  {canManage ? (
+                    <button
+                      className="button secondary compact"
+                      type="button"
+                      onClick={() => void reuseConfiguration()}
+                    >
+                      <CopyPlus size={13} />
+                      Reuse configuration
+                    </button>
+                  ) : null}
+                  <StatusBadge status={detail.status} />
+                </div>
               </div>
 
               <div className="evaluation-summary-grid">
@@ -691,6 +900,47 @@ export function EvaluationsPage({
                           ? "—"
                           : evaluationCase.score.toFixed(2)}
                       </strong>
+                      <div className="evaluation-case-actions">
+                        {evaluationCase.candidateTraceId === null ? null : (
+                          <button
+                            className="case-action"
+                            type="button"
+                            onClick={() =>
+                              onOpenTrace(
+                                evaluationCase.candidateTraceId as string,
+                              )
+                            }
+                          >
+                            Open candidate trace
+                          </button>
+                        )}
+                        <button
+                          className="case-action"
+                          type="button"
+                          onClick={() =>
+                            onOpenDatasetItem({
+                              datasetId: detail.datasetId,
+                              revisionId: detail.datasetRevisionId,
+                              itemId: evaluationCase.datasetItemId,
+                            })
+                          }
+                        >
+                          Open dataset item
+                        </button>
+                        {evaluationCase.judgeCall === null ||
+                        (evaluationCase.judgeCall.promptContentRef === null &&
+                          evaluationCase.judgeCall.responseContentRef ===
+                            null) ? null : (
+                          <button
+                            className="case-action audit"
+                            type="button"
+                            onClick={() => setAuditCase(evaluationCase)}
+                          >
+                            <ShieldCheck size={12} />
+                            Judge audit
+                          </button>
+                        )}
+                      </div>
                     </article>
                   ))}
                 </div>
@@ -699,8 +949,176 @@ export function EvaluationsPage({
           )}
         </div>
       </section>
+      {auditCase?.judgeCall === null ||
+      auditCase?.judgeCall === undefined ? null : (
+        <JudgeAuditDialog
+          judgeCall={auditCase.judgeCall}
+          caseId={auditCase.caseId}
+          onClose={() => setAuditCase(null)}
+        />
+      )}
     </div>
   );
+}
+
+function JudgeAuditDialog({
+  judgeCall,
+  caseId,
+  onClose,
+}: {
+  judgeCall: NonNullable<EvaluationDetail["cases"][number]["judgeCall"]>;
+  caseId: string;
+  onClose: () => void;
+}) {
+  const [prompt, setPrompt] = useState<AuditContent>({
+    text: null,
+    error: null,
+  });
+  const [response, setResponse] = useState<AuditContent>({
+    text: null,
+    error: null,
+  });
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    let active = true;
+    Promise.all([
+      loadAuditContent(judgeCall.promptContentRef),
+      loadAuditContent(judgeCall.responseContentRef),
+    ]).then(([nextPrompt, nextResponse]) => {
+      if (!active) {
+        return;
+      }
+      setPrompt(nextPrompt);
+      setResponse(nextResponse);
+      setLoading(false);
+    });
+    const closeOnEscape = (event: KeyboardEvent) => {
+      if (event.key === "Escape") {
+        onClose();
+      }
+    };
+    window.addEventListener("keydown", closeOnEscape);
+    return () => {
+      active = false;
+      window.removeEventListener("keydown", closeOnEscape);
+    };
+  }, [judgeCall, onClose]);
+
+  return (
+    <div
+      className="dataset-dialog-backdrop"
+      onMouseDown={(event) => {
+        if (event.target === event.currentTarget) {
+          onClose();
+        }
+      }}
+    >
+      <section
+        className="dataset-dialog judge-audit-dialog"
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="judge-audit-title"
+      >
+        <header className="dataset-dialog-header">
+          <div>
+            <span className="dataset-dialog-icon">
+              <ShieldCheck size={17} />
+            </span>
+            <div>
+              <h2 id="judge-audit-title">Judge audit · {caseId}</h2>
+              <p>
+                {judgeCall.provider} · {judgeCall.model} ·{" "}
+                {judgeCall.status} · {judgeCall.inputTokens ?? "—"} input tokens
+                · {judgeCall.outputTokens ?? "—"} output tokens
+              </p>
+            </div>
+          </div>
+          <button
+            className="icon-button"
+            type="button"
+            aria-label="Close Judge audit"
+            onClick={onClose}
+          >
+            <X size={16} />
+          </button>
+        </header>
+        <div className="dataset-content-grid judge-audit-grid">
+          <AuditPanel
+            icon={<FileText size={14} />}
+            label="Judge prompt"
+            content={prompt}
+            loading={loading}
+          />
+          <AuditPanel
+            icon={<ListChecks size={14} />}
+            label="Judge response"
+            content={response}
+            loading={loading}
+          />
+        </div>
+      </section>
+    </div>
+  );
+}
+
+interface AuditContent {
+  text: string | null;
+  error: string | null;
+}
+
+function AuditPanel({
+  icon,
+  label,
+  content,
+  loading,
+}: {
+  icon: React.ReactNode;
+  label: string;
+  content: AuditContent;
+  loading: boolean;
+}) {
+  return (
+    <article className="dataset-content-panel">
+      <header>
+        {icon}
+        <strong>{label}</strong>
+      </header>
+      {loading ? (
+        <p className="dataset-content-state">Loading audit content…</p>
+      ) : content.error !== null ? (
+        <p className="dataset-content-error">
+          <CircleX size={13} />
+          {content.error}
+        </p>
+      ) : content.text === null ? (
+        <p className="dataset-content-state">
+          No audit content reference is available.
+        </p>
+      ) : (
+        <pre>{content.text}</pre>
+      )}
+    </article>
+  );
+}
+
+async function loadAuditContent(
+  contentId: string | null,
+): Promise<AuditContent> {
+  if (contentId === null) {
+    return { text: null, error: null };
+  }
+  try {
+    return {
+      text: await fetchContentText(contentId),
+      error: null,
+    };
+  } catch (error) {
+    return {
+      text: null,
+      error: error instanceof Error ? error.message : "Content unavailable",
+    };
+  }
 }
 
 function evaluatorFromForm({
@@ -711,6 +1129,7 @@ function evaluatorFromForm({
   judgeModel,
   judgeRubric,
   allowExternalContent,
+  requireExternalConsent = true,
 }: {
   name: string;
   version: string;
@@ -719,6 +1138,7 @@ function evaluatorFromForm({
   judgeModel: string;
   judgeRubric: string;
   allowExternalContent: boolean;
+  requireExternalConsent?: boolean;
 }): EvaluatorDefinition {
   const base = {
     name: name.trim(),
@@ -738,7 +1158,7 @@ function evaluatorFromForm({
     case "max_tool_errors":
       return { ...base, kind, config: { value: Number(configValue) } };
     case "llm_judge":
-      if (!allowExternalContent) {
+      if (requireExternalConsent && !allowExternalContent) {
         throw new Error("External Judge consent is required");
       }
       return {
@@ -752,6 +1172,42 @@ function evaluatorFromForm({
         },
       };
   }
+}
+
+function evaluatorConfigValue(evaluator: EvaluatorDefinition): string {
+  switch (evaluator.kind) {
+    case "contains":
+      return evaluator.config.value;
+    case "regex":
+      return evaluator.config.pattern;
+    case "max_latency_ms":
+    case "max_cost_micros":
+    case "max_tool_errors":
+      return String(evaluator.config.value);
+    case "exact":
+    case "json_valid":
+    case "llm_judge":
+      return "";
+  }
+}
+
+function selectorTimeRange(
+  startedAfter: string | undefined,
+  startedBefore: string | undefined,
+): string {
+  if (startedAfter === undefined || startedBefore === undefined) {
+    return "24";
+  }
+  const hours =
+    (new Date(startedBefore).getTime() - new Date(startedAfter).getTime()) /
+    (60 * 60 * 1000);
+  if (!Number.isFinite(hours)) {
+    return "24";
+  }
+  if (hours <= 24) {
+    return "24";
+  }
+  return hours <= 24 * 7 ? "168" : "720";
 }
 
 function StatusBadge({

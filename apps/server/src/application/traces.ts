@@ -1,6 +1,12 @@
 import type {
   ReviewState,
+  SessionDetail,
+  SessionListQuery,
+  SessionListResponse,
+  SessionSummary,
+  SessionStatusCounts,
   TraceDetail,
+  TraceListItem,
   TraceListQuery,
   TraceListResponse,
 } from "@agent-ops/contracts";
@@ -28,13 +34,25 @@ export interface NormalizedTraceListQuery {
   limit: number;
 }
 
+export interface NormalizedSessionListQuery {
+  startedAfter: string;
+  search?: string;
+  limit: number;
+}
+
 export interface TraceReadRepository {
   list(query: NormalizedTraceListQuery): Promise<TraceListResponse>;
+  listSessions(
+    query: NormalizedSessionListQuery,
+  ): Promise<SessionSummary[]>;
+  listBySession(sessionId: string): Promise<TraceListItem[]>;
   get(traceId: string): Promise<TraceDetail | null>;
 }
 
 export interface TraceQueryService {
   list(query: TraceListQuery): Promise<TraceListResponse>;
+  listSessions(query: SessionListQuery): Promise<SessionListResponse>;
+  getSession(sessionId: string): Promise<SessionDetail | null>;
   get(traceId: string): Promise<TraceDetail | null>;
 }
 
@@ -66,9 +84,127 @@ export function createTraceQueryService(
     list(query) {
       return repository.list(normalizeTraceListQuery(query, now()));
     },
+    async listSessions(query) {
+      const generatedAt = now();
+      const normalized = normalizeSessionListQuery(query, generatedAt);
+      const items = await repository.listSessions(normalized);
+      return {
+        windowHours: Math.max(
+          1,
+          Math.ceil(
+            (generatedAt.getTime() -
+              new Date(normalized.startedAfter).getTime()) /
+              (60 * 60 * 1000),
+          ),
+        ),
+        generatedAt: generatedAt.toISOString(),
+        items,
+      };
+    },
+    async getSession(sessionId) {
+      const normalized = sessionId.trim();
+      if (normalized === "" || normalized.length > 256) {
+        throw new InvalidTraceQueryError(
+          "sessionId must be 1-256 characters",
+        );
+      }
+      const runs = await repository.listBySession(normalized);
+      return runs.length === 0
+        ? null
+        : sessionDetail(normalized, runs);
+    },
     get(traceId) {
       return repository.get(traceId);
     },
+  };
+}
+
+export function normalizeSessionListQuery(
+  query: SessionListQuery,
+  now: Date,
+): NormalizedSessionListQuery {
+  const requestedLimit = Number(query.limit ?? 100);
+  const limit = Number.isFinite(requestedLimit)
+    ? Math.min(Math.max(Math.trunc(requestedLimit), 1), 200)
+    : 100;
+  const search = optionalText(query.search);
+  if (search !== undefined && search.length > 256) {
+    throw new InvalidTraceQueryError(
+      "session search must be at most 256 characters",
+    );
+  }
+  return {
+    startedAfter:
+      parseDate(query.startedAfter, "startedAfter") ??
+      new Date(now.getTime() - 30 * 24 * 60 * 60 * 1000).toISOString(),
+    ...optionalEntry("search", search),
+    limit,
+  };
+}
+
+function sessionDetail(
+  sessionId: string,
+  runs: TraceListItem[],
+): SessionDetail {
+  const statusCounts: SessionStatusCounts = {
+    unknown: 0,
+    success: 0,
+    failed: 0,
+    partial: 0,
+    cancelled: 0,
+    timeout: 0,
+  };
+  let firstStartedAt: number | null = null;
+  let lastEndedAt: number | null = null;
+  let totalCostMicros = 0;
+  let inputTokens = 0;
+  let outputTokens = 0;
+  let toolErrorCount = 0;
+
+  for (const run of runs) {
+    if (run.runStatus === null) {
+      statusCounts.unknown += 1;
+    } else {
+      statusCounts[run.runStatus] += 1;
+    }
+    totalCostMicros += run.costMicros ?? 0;
+    inputTokens += run.inputTokens ?? 0;
+    outputTokens += run.outputTokens ?? 0;
+    toolErrorCount += run.toolErrorCount ?? 0;
+    if (run.startedAt !== null) {
+      const startedAt = new Date(run.startedAt).getTime();
+      const endedAt = startedAt + (run.latencyMs ?? 0);
+      firstStartedAt =
+        firstStartedAt === null ? startedAt : Math.min(firstStartedAt, startedAt);
+      lastEndedAt =
+        lastEndedAt === null ? endedAt : Math.max(lastEndedAt, endedAt);
+    }
+  }
+
+  return {
+    sessionId,
+    traceCount: runs.length,
+    firstStartedAt:
+      firstStartedAt === null ? null : new Date(firstStartedAt).toISOString(),
+    lastEndedAt:
+      lastEndedAt === null ? null : new Date(lastEndedAt).toISOString(),
+    durationMs:
+      firstStartedAt === null || lastEndedAt === null
+        ? null
+        : Math.max(0, lastEndedAt - firstStartedAt),
+    totalCostMicros,
+    inputTokens,
+    outputTokens,
+    toolErrorCount,
+    statusCounts,
+    appNames: [
+      ...new Set(
+        runs
+          .map((run) => run.appName)
+          .filter((name): name is string => name !== null),
+      ),
+    ].sort(),
+    runs,
   };
 }
 

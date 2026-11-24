@@ -6,6 +6,7 @@ import type {
   EvaluationSummary,
   EvaluationTraceSelector,
   EvaluatorDefinition,
+  EvaluatorTemplate,
 } from "@agent-ops/contracts";
 import type { Pool, PoolClient } from "pg";
 
@@ -27,6 +28,27 @@ export function createPostgresEvaluationRepository(
         null,
       ]);
       return result.rows.map(mapEvaluationSummary);
+    },
+
+    async listEvaluators() {
+      const result = await pool.query<EvaluatorRow>(
+        `select
+          id, name, version, kind, config,
+          created_by_name, created_at
+         from evaluator_versions
+         order by name, version desc`,
+      );
+      return result.rows.map(mapEvaluatorTemplate);
+    },
+
+    async createEvaluator(principal, evaluator) {
+      const client = await pool.connect();
+      try {
+        const row = await ensureEvaluatorVersion(client, principal, evaluator);
+        return mapEvaluatorTemplate(row);
+      } finally {
+        client.release();
+      }
     },
 
     async get(evaluationId) {
@@ -170,9 +192,11 @@ async function ensureEvaluatorVersion(
   client: PoolClient,
   principal: HumanPrincipal,
   evaluator: EvaluatorDefinition,
-): Promise<{ id: string; kind: string; config: unknown }> {
+): Promise<EvaluatorRow> {
   const existing = await client.query<EvaluatorRow>(
-    `select id, name, version, kind, config
+    `select
+       id, name, version, kind, config,
+       created_by_name, created_at
      from evaluator_versions
      where name = $1 and version = $2`,
     [evaluator.name, evaluator.version],
@@ -194,7 +218,9 @@ async function ensureEvaluatorVersion(
       `insert into evaluator_versions (
         name, version, kind, config, created_by_subject, created_by_name
       ) values ($1, $2, $3, $4, $5, $6)
-      returning id, name, version, kind, config`,
+      returning
+        id, name, version, kind, config,
+        created_by_name, created_at`,
       [
         evaluator.name,
         evaluator.version,
@@ -304,6 +330,12 @@ async function loadEvaluation(
   );
   return {
     ...mapEvaluationSummary(row),
+    evaluator: {
+      name: row.evaluator_name,
+      version: row.evaluator_version,
+      kind: row.evaluator_kind,
+      config: row.evaluator_config,
+    } as EvaluatorDefinition,
     traceSelector: row.trace_selector as EvaluationTraceSelector,
     cases: cases.rows.map(mapEvaluationCase),
   };
@@ -314,7 +346,8 @@ function summaryQuery(): string {
     e.id as evaluation_id, d.id as dataset_id, d.name as dataset_name,
     r.id as dataset_revision_id, r.revision as dataset_revision,
     v.name as evaluator_name, v.version as evaluator_version,
-    v.kind as evaluator_kind, e.trace_selector, e.status, e.total_cases,
+    v.kind as evaluator_kind, v.config as evaluator_config,
+    e.trace_selector, e.status, e.total_cases,
     e.trace_selector->>'appName' as candidate_app_name,
     e.trace_selector->>'promptVersion' as candidate_prompt_version,
     e.scored_cases, e.passed_cases, e.failed_cases, e.missing_cases,
@@ -348,8 +381,10 @@ interface EvaluatorRow {
   id: string;
   name: string;
   version: number;
-  kind: string;
+  kind: EvaluatorDefinition["kind"];
   config: unknown;
+  created_by_name: string;
+  created_at: Date;
 }
 
 interface DatasetRevisionRow {
@@ -379,6 +414,7 @@ interface EvaluationSummaryRow {
   evaluator_name: string;
   evaluator_version: number;
   evaluator_kind: EvaluatorDefinition["kind"];
+  evaluator_config: unknown;
   candidate_app_name: string | null;
   candidate_prompt_version: string | null;
   trace_selector: unknown;
@@ -458,6 +494,20 @@ function mapEvaluationSummary(row: EvaluationSummaryRow): EvaluationSummary {
     startedAt: row.started_at?.toISOString() ?? null,
     completedAt: row.completed_at?.toISOString() ?? null,
     lastError: row.last_error,
+  };
+}
+
+function mapEvaluatorTemplate(row: EvaluatorRow): EvaluatorTemplate {
+  return {
+    evaluatorId: row.id,
+    evaluator: {
+      name: row.name,
+      version: row.version,
+      kind: row.kind,
+      config: row.config,
+    } as EvaluatorDefinition,
+    createdBy: row.created_by_name,
+    createdAt: row.created_at.toISOString(),
   };
 }
 

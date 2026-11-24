@@ -2,8 +2,13 @@ import {
   Activity,
   ArrowLeft,
   Braces,
+  Check,
   ClipboardCheck,
+  Clock3,
+  Database,
   Gauge,
+  Link2,
+  Search,
   Timer,
 } from "lucide-react";
 import { useState } from "react";
@@ -30,6 +35,9 @@ import {
   SpanTypeIcon,
   StatusBadge,
 } from "./TracePrimitives.js";
+import { TraceDatasetDialog } from "./TraceDatasetDialog.js";
+import { TraceWaterfall } from "./TraceWaterfall.js";
+import { SpanContentActions } from "./SpanContentActions.js";
 
 export function TraceDetailPage({
   trace,
@@ -41,6 +49,8 @@ export function TraceDetailPage({
   me,
   reviewSubmitting,
   onSubmitReview,
+  onOpenDatasets,
+  onOpenSession,
   error,
 }: {
   trace: TraceView;
@@ -52,8 +62,43 @@ export function TraceDetailPage({
   me: MeResponse;
   reviewSubmitting: boolean;
   onSubmitReview: (input: ReviewInput) => Promise<void>;
+  onOpenDatasets: () => void;
+  onOpenSession: (sessionId: string) => void;
   error: string | null;
 }) {
+  const [showDatasetDialog, setShowDatasetDialog] = useState(false);
+  const [spanView, setSpanView] = useState<"tree" | "waterfall">("tree");
+  const [spanQuery, setSpanQuery] = useState("");
+  const [errorsOnly, setErrorsOnly] = useState(false);
+  const [linkCopied, setLinkCopied] = useState(false);
+  const visibleSpans = trace.spans.filter((span) => {
+    if (errorsOnly && span.status === "ok") {
+      return false;
+    }
+    const query = spanQuery.trim().toLowerCase();
+    if (query === "") {
+      return true;
+    }
+    return (
+      span.name.toLowerCase().includes(query) ||
+      span.type.toLowerCase().includes(query) ||
+      span.status.toLowerCase().includes(query) ||
+      Object.values(span.metadata).some((value) =>
+        value.toLowerCase().includes(query),
+      )
+    );
+  });
+
+  const copyLink = async () => {
+    try {
+      await navigator.clipboard.writeText(window.location.href);
+      setLinkCopied(true);
+      window.setTimeout(() => setLinkCopied(false), 1600);
+    } catch {
+      setLinkCopied(false);
+    }
+  };
+
   return (
     <div className="trace-detail-page">
       <div className="detail-heading">
@@ -77,6 +122,42 @@ export function TraceDetailPage({
                 {ingestStateLabel(trace.ingestState)}
               </span>
             </div>
+          </div>
+          <div className="detail-actions">
+            {trace.sessionId === "unknown" ? null : (
+              <button
+                className="button secondary compact"
+                type="button"
+                onClick={() => onOpenSession(trace.sessionId)}
+              >
+                <Clock3 size={14} />
+                View session
+              </button>
+            )}
+            <button
+              className="button secondary compact"
+              type="button"
+              onClick={() => void copyLink()}
+            >
+              {linkCopied ? <Check size={14} /> : <Link2 size={14} />}
+              {linkCopied ? "Link copied" : "Copy link"}
+            </button>
+            {me.canReview ? (
+              <button
+                className="button primary compact"
+                type="button"
+                disabled={trace.ingestState !== "sealed_complete"}
+                title={
+                  trace.ingestState === "sealed_complete"
+                    ? "Add this trace to a dataset revision"
+                    : "The trace must be sealed before it can be added to a dataset"
+                }
+                onClick={() => setShowDatasetDialog(true)}
+              >
+                <Database size={14} />
+                Add to dataset
+              </button>
+            ) : null}
           </div>
         </div>
         <div className="detail-metadata">
@@ -128,43 +209,90 @@ export function TraceDetailPage({
           <div className="panel-heading">
             <div>
               <strong>Execution tree</strong>
-              <small>{trace.spans.length} spans</small>
+              <small>
+                {visibleSpans.length} of {trace.spans.length} spans
+              </small>
             </div>
-            <button className="button secondary compact" type="button" disabled>
-              Waterfall
+            <div className="span-view-toggle">
+              <button
+                className={spanView === "tree" ? "active" : ""}
+                type="button"
+                onClick={() => setSpanView("tree")}
+              >
+                Tree
+              </button>
+              <button
+                className={spanView === "waterfall" ? "active" : ""}
+                type="button"
+                onClick={() => setSpanView("waterfall")}
+              >
+                Waterfall
+              </button>
+            </div>
+          </div>
+          <div className="span-filter-bar">
+            <label>
+              <Search size={13} />
+              <input
+                value={spanQuery}
+                onChange={(event) => setSpanQuery(event.target.value)}
+                placeholder="Find span, type, status, metadata…"
+                aria-label="Search spans"
+              />
+            </label>
+            <button
+              className={errorsOnly ? "active" : ""}
+              type="button"
+              onClick={() => setErrorsOnly((current) => !current)}
+            >
+              Errors only
             </button>
           </div>
-          <div className="span-tree">
-            {trace.spans.map((span) => (
-              <button
-                className={`span-row ${selectedSpan?.id === span.id ? "selected" : ""}`}
-                key={span.id}
-                type="button"
-                onClick={() => onSelectSpan(span)}
-                style={{ paddingLeft: `${18 + span.depth * 22}px` }}
-              >
-                <span className={`span-icon ${span.type}`}>
-                  <SpanTypeIcon type={span.type} />
-                </span>
-                <span className="span-name">
-                  <strong>{span.name}</strong>
-                  <small>{spanTypeLabel(span.type)}</small>
-                </span>
-                <span className="span-stats">
-                  <code>{formatDuration(span.latencyMs)}</code>
-                  {span.inputTokens !== undefined ? (
-                    <small>
-                      {span.inputTokens.toLocaleString()} →{" "}
-                      {span.outputTokens?.toLocaleString()}
-                    </small>
-                  ) : null}
-                </span>
-                {span.status !== "ok" ? (
-                  <span className={`span-status ${span.status}`} />
-                ) : null}
-              </button>
-            ))}
-          </div>
+          {spanView === "waterfall" ? (
+            <TraceWaterfall
+              spans={visibleSpans}
+              selectedSpanId={selectedSpan?.id ?? null}
+              onSelectSpan={onSelectSpan}
+            />
+          ) : (
+            <div className="span-tree">
+              {visibleSpans.length === 0 ? (
+                <div className="span-filter-empty">
+                  No spans match the current search.
+                </div>
+              ) : (
+                visibleSpans.map((span) => (
+                  <button
+                    className={`span-row ${selectedSpan?.id === span.id ? "selected" : ""}`}
+                    key={span.id}
+                    type="button"
+                    onClick={() => onSelectSpan(span)}
+                    style={{ paddingLeft: `${18 + span.depth * 22}px` }}
+                  >
+                    <span className={`span-icon ${span.type}`}>
+                      <SpanTypeIcon type={span.type} />
+                    </span>
+                    <span className="span-name">
+                      <strong>{span.name}</strong>
+                      <small>{spanTypeLabel(span.type)}</small>
+                    </span>
+                    <span className="span-stats">
+                      <code>{formatDuration(span.latencyMs)}</code>
+                      {span.inputTokens !== undefined ? (
+                        <small>
+                          {span.inputTokens.toLocaleString()} →{" "}
+                          {span.outputTokens?.toLocaleString()}
+                        </small>
+                      ) : null}
+                    </span>
+                    {span.status !== "ok" ? (
+                      <span className={`span-status ${span.status}`} />
+                    ) : null}
+                  </button>
+                ))
+              )}
+            </div>
+          )}
         </div>
 
         <div className="span-detail-panel">
@@ -209,11 +337,28 @@ export function TraceDetailPage({
                 {inspectorTab === "metadata" ? (
                   <MetadataGrid metadata={selectedSpan.metadata} />
                 ) : (
-                  <pre>
-                    {inspectorTab === "input"
-                      ? selectedSpan.input
-                      : selectedSpan.output}
-                  </pre>
+                  <>
+                    <SpanContentActions
+                      traceId={trace.id}
+                      span={selectedSpan}
+                      tab={inspectorTab}
+                      content={
+                        inspectorTab === "input"
+                          ? selectedSpan.input
+                          : selectedSpan.output
+                      }
+                      downloadable={
+                        inspectorTab === "input"
+                          ? selectedSpan.inputDownloadable
+                          : selectedSpan.outputDownloadable
+                      }
+                    />
+                    <pre>
+                      {inspectorTab === "input"
+                        ? selectedSpan.input
+                        : selectedSpan.output}
+                    </pre>
+                  </>
                 )}
               </div>
             </>
@@ -227,6 +372,16 @@ export function TraceDetailPage({
         submitting={reviewSubmitting}
         onSubmit={onSubmitReview}
       />
+      {showDatasetDialog ? (
+        <TraceDatasetDialog
+          trace={trace}
+          onClose={() => setShowDatasetDialog(false)}
+          onOpenDatasets={() => {
+            setShowDatasetDialog(false);
+            onOpenDatasets();
+          }}
+        />
+      ) : null}
     </div>
   );
 }
