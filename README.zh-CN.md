@@ -132,16 +132,19 @@ uv run --project packages/sdk-python mypy packages/sdk-python/src/agent_ops
 
 ## SDK 独立包
 
-TypeScript 和 Python SDK 都支持独立安装：
+`0.1.0` 已发布到 npm、PyPI 和
+[GitHub Release](https://github.com/DraskyChen/Agent-Ops/releases/tag/sdk-v0.1.0)。
+TypeScript 和 Python SDK 使用相同的发行包名：
 
 ```bash
-npm install agent-ops-otel-sdk
-pip install agent-ops-otel-sdk
+npm install agent-ops-otel-sdk@0.1.0
+pip install agent-ops-otel-sdk==0.1.0
 ```
 
 npm 包仅支持 ESM，需要 Node.js 20 或更高版本；Python 包需要 Python 3.11
 或更高版本。两个包使用相同的 `0.1` 遥测契约，并通过 `sdk-v*` 标签同步发布。
-Registry 和发布流程见 [SDK 发布手册](docs/sdk-release.md)。
+Python 的导入名保持为 `agent_ops`。Registry、兼容矩阵、校验值和维护流程见
+[SDK 发布手册](docs/sdk-release.md)。
 
 启动平台：
 

@@ -2,6 +2,9 @@
 
 OpenTelemetry tracing helpers for Python agents that send traces to Agent Ops.
 
+Current release: [`0.1.0`](https://github.com/DraskyChen/Agent-Ops/releases/tag/sdk-v0.1.0)
+on [PyPI](https://pypi.org/project/agent-ops-otel-sdk/0.1.0/).
+
 ## Requirements
 
 - Python 3.11 or newer
@@ -10,7 +13,7 @@ OpenTelemetry tracing helpers for Python agents that send traces to Agent Ops.
 ## Install
 
 ```bash
-pip install agent-ops-otel-sdk
+pip install agent-ops-otel-sdk==0.1.0
 ```
 
 ## Quick start

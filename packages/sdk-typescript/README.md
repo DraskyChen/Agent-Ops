@@ -2,6 +2,9 @@
 
 OpenTelemetry tracing helpers for Node.js agents that send traces to Agent Ops.
 
+Current release: [`0.1.0`](https://github.com/DraskyChen/Agent-Ops/releases/tag/sdk-v0.1.0)
+on [npm](https://www.npmjs.com/package/agent-ops-otel-sdk).
+
 ## Requirements
 
 - Node.js 20 or newer
@@ -10,7 +13,7 @@ OpenTelemetry tracing helpers for Node.js agents that send traces to Agent Ops.
 ## Install
 
 ```bash
-npm install agent-ops-otel-sdk
+npm install agent-ops-otel-sdk@0.1.0
 ```
 
 The package is ESM-only and does not support browser runtimes.
