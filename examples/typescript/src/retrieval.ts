@@ -1,4 +1,4 @@
-import { withAgentRun, withLlmCall, withRetrieval } from "@agent-ops/sdk";
+import { withAgentRun, withLlmCall, withRetrieval } from "agent-ops-sdk";
 
 import { sleep } from "./shared.js";
 

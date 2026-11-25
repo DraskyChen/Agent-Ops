@@ -1,4 +1,4 @@
-import { configureTracing } from "@agent-ops/sdk";
+import { configureTracing } from "agent-ops-sdk";
 import { loadEnvFile } from "node:process";
 import { fileURLToPath } from "node:url";
 

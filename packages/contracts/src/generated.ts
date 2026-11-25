@@ -98,3 +98,14 @@ export const ATTR = {
 } as const;
 
 export type AttributeName = (typeof ATTR)[keyof typeof ATTR];
+
+const SPAN_TYPE_SET = new Set<string>(ENUMS.spanType);
+const TASK_TYPE_SET = new Set<string>(TASK_TYPES);
+
+export function normalizeSpanType(value: string): SpanType {
+  return SPAN_TYPE_SET.has(value) ? (value as SpanType) : "custom";
+}
+
+export function normalizeTaskType(value: string): string {
+  return TASK_TYPE_SET.has(value) ? value : "other";
+}

@@ -15,6 +15,7 @@ from opentelemetry.sdk.trace.export import (
     SpanExporter,
 )
 
+from ._version import __version__ as _SDK_VERSION
 from .content import (
     ContentCaptureConfig,
     clear_content_capture,
@@ -22,7 +23,6 @@ from .content import (
 )
 from .generated import SCHEMA_VERSION, SDK_NAME, Environment
 
-_SDK_VERSION = "0.1.0"
 _lock = Lock()
 _provider: TracerProvider | None = None
 

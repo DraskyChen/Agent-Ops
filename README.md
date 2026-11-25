@@ -144,6 +144,20 @@ uv run --project packages/sdk-python pytest -q
 uv run --project packages/sdk-python mypy packages/sdk-python/src/agent_ops
 ```
 
+## SDK packages
+
+The TypeScript and Python SDKs are independently installable:
+
+```bash
+npm install agent-ops-sdk
+pip install agent-ops-sdk
+```
+
+The npm package is ESM-only and requires Node.js 20 or newer. The Python package
+requires Python 3.11 or newer. Both packages expose the same `0.1` telemetry
+contract and are released together under `sdk-v*` tags. See the
+[SDK release runbook](docs/sdk-release.md) for registry and release details.
+
 Run the platform:
 
 ```bash

@@ -273,7 +273,7 @@ importers:
 
   examples/typescript:
     dependencies:
-      '@agent-ops/sdk':
+      agent-ops-sdk:
         specifier: workspace:*
         version: link:../../packages/sdk-typescript
       openai:
@@ -327,9 +327,6 @@ importers:
 
   packages/sdk-typescript:
     dependencies:
-      '@agent-ops/contracts':
-        specifier: workspace:*
-        version: link:../contracts
       '@opentelemetry/api':
         specifier: 1.10.0
         version: 1.10.0

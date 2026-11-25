@@ -44,6 +44,9 @@ const taskTypePath = fileURLToPath(
   new URL("../registry/task_types.yaml", import.meta.url),
 );
 const tsOutputPath = fileURLToPath(new URL("../src/generated.ts", import.meta.url));
+const sdkTsOutputPath = fileURLToPath(
+  new URL("../../sdk-typescript/src/generated.ts", import.meta.url),
+);
 const jsonOutputPath = fileURLToPath(
   new URL("../generated/contract.json", import.meta.url),
 );
@@ -75,6 +78,7 @@ const generatedJson = `${JSON.stringify(
 
 await Promise.all([
   writeOutput(tsOutputPath, generatedTs),
+  writeOutput(sdkTsOutputPath, generatedTs),
   writeOutput(pythonOutputPath, generatedPython),
   writeOutput(jsonOutputPath, generatedJson),
 ]);
@@ -147,6 +151,17 @@ ${attributeEntries}
 } as const;
 
 export type AttributeName = (typeof ATTR)[keyof typeof ATTR];
+
+const SPAN_TYPE_SET = new Set<string>(ENUMS.spanType);
+const TASK_TYPE_SET = new Set<string>(TASK_TYPES);
+
+export function normalizeSpanType(value: string): SpanType {
+  return SPAN_TYPE_SET.has(value) ? (value as SpanType) : "custom";
+}
+
+export function normalizeTaskType(value: string): string {
+  return TASK_TYPE_SET.has(value) ? value : "other";
+}
 `;
 }
 

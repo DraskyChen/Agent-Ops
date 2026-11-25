@@ -5,7 +5,7 @@ import {
   type ErrorCategory,
   type RunStatus,
   type ToolType,
-} from "@agent-ops/contracts";
+} from "./generated.js";
 import {
   context,
   SpanKind,
