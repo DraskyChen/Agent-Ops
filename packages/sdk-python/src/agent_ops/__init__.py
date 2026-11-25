@@ -1,3 +1,4 @@
+from ._version import __version__
 from .generated import Attr, Environment, RunStatus, SpanType, TaskType
 from .runtime import (
     TracingConfig,
@@ -33,6 +34,7 @@ __all__ = [
     "TaskType",
     "ToolCallHandle",
     "TracingConfig",
+    "__version__",
     "agent_run",
     "async_agent_run",
     "async_llm_call",

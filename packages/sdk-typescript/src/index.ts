@@ -5,8 +5,9 @@ export {
   TASK_TYPES,
   normalizeSpanType,
   normalizeTaskType,
-} from "@agent-ops/contracts";
+} from "./generated.js";
 
+export { SDK_VERSION } from "./version.js";
 export {
   commonAttributes,
   redact,

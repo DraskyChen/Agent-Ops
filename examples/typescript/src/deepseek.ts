@@ -1,7 +1,7 @@
 import {
   withAgentRun,
   withLlmCall,
-} from "@agent-ops/sdk";
+} from "agent-ops-sdk";
 import OpenAI from "openai";
 
 export async function runDeepSeekExample(): Promise<void> {

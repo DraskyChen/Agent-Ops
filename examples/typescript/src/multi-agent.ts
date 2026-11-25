@@ -3,7 +3,7 @@ import {
   withLlmCall,
   withSubAgent,
   withToolCall,
-} from "@agent-ops/sdk";
+} from "agent-ops-sdk";
 
 import { sleep } from "./shared.js";
 

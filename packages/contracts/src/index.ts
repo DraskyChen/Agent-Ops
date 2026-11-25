@@ -1,7 +1,6 @@
 import {
   ENUMS,
   SCHEMA_VERSION,
-  TASK_TYPES,
   type ContentRecorded,
   type RunStatus,
   type SpanType,
@@ -97,7 +96,6 @@ export type {
 
 const SPAN_TYPE_SET = new Set<string>(ENUMS.spanType);
 const RUN_STATUS_SET = new Set<string>(ENUMS.runStatus);
-const TASK_TYPE_SET = new Set<string>(TASK_TYPES);
 const CONTENT_RECORDED_SET = new Set<string>(ENUMS.contentRecorded);
 const TRACE_INGEST_STATE_SET = new Set<string>(ENUMS.traceIngestState);
 
@@ -105,16 +103,8 @@ export function isSpanType(value: string): value is SpanType {
   return SPAN_TYPE_SET.has(value);
 }
 
-export function normalizeSpanType(value: string): SpanType | "custom" {
-  return isSpanType(value) ? value : "custom";
-}
-
 export function isRunStatus(value: string): value is RunStatus {
   return RUN_STATUS_SET.has(value);
-}
-
-export function normalizeTaskType(value: string): string {
-  return TASK_TYPE_SET.has(value) ? value : "other";
 }
 
 export function isContentRecorded(value: string): value is ContentRecorded {

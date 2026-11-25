@@ -1,8 +1,29 @@
 {
-  "name": "@agent-ops/sdk",
+  "name": "agent-ops-sdk",
   "version": "0.1.0",
-  "private": true,
+  "description": "OpenTelemetry tracing SDK for Agent Ops",
+  "license": "Apache-2.0",
+  "author": "Agent Ops Contributors",
+  "homepage": "https://github.com/DraskyChen/Agent-Ops#readme",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/DraskyChen/Agent-Ops.git",
+    "directory": "packages/sdk-typescript"
+  },
+  "bugs": {
+    "url": "https://github.com/DraskyChen/Agent-Ops/issues"
+  },
+  "keywords": [
+    "agent",
+    "observability",
+    "opentelemetry",
+    "tracing",
+    "llm"
+  ],
   "type": "module",
+  "engines": {
+    "node": ">=20"
+  },
   "exports": {
     ".": {
       "types": "./dist/index.d.ts",
@@ -10,15 +31,21 @@
     }
   },
   "files": [
-    "dist"
+    "dist",
+    "README.md",
+    "LICENSE"
   ],
   "scripts": {
     "build": "tsc -p tsconfig.json",
+    "prepack": "pnpm build",
     "test": "vitest run",
     "typecheck": "tsc -p tsconfig.json --noEmit"
   },
+  "publishConfig": {
+    "access": "public",
+    "provenance": true
+  },
   "dependencies": {
-    "@agent-ops/contracts": "workspace:*",
     "@opentelemetry/api": "1.10.0",
     "@opentelemetry/exporter-trace-otlp-proto": "0.301.2",
     "@opentelemetry/resources": "3.1.1",

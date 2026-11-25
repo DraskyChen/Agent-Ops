@@ -2,7 +2,7 @@ import {
   ATTR,
   type ContentRecorded,
   type ErrorCategory,
-} from "@agent-ops/contracts";
+} from "./generated.js";
 import type { Attributes, Span } from "@opentelemetry/api";
 
 export const REDACTION_RULE_VERSION = "agent-ops-redaction-v1";

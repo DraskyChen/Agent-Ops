@@ -3,6 +3,7 @@ dist/
 coverage/
 .next/
 .turbo/
+artifacts/
 
 .env
 .env.*

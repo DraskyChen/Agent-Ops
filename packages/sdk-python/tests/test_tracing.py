@@ -12,6 +12,7 @@ from agent_ops import (
     Attr,
     Environment,
     TracingConfig,
+    __version__,
     agent_run,
     configure_tracing,
     llm_call,
@@ -74,6 +75,8 @@ def test_agent_llm_and_failed_tool_spans_share_one_trace(
     llm = by_name["chat"]
     tool = by_name["query_order"]
 
+    assert __version__ == "0.1.0"
+    assert root.resource.attributes["agent.sdk.version"] == __version__
     assert root.attributes[Attr.AGENT_SPAN_TYPE] == "agent.run"
     assert root.attributes[Attr.AGENT_RUN_STATUS] == "success"
     assert root.attributes[Attr.AGENT_RUN_STOP_REASON] == "final_answer"

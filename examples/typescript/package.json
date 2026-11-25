@@ -14,7 +14,7 @@
     "typecheck": "tsc -p tsconfig.json --noEmit"
   },
   "dependencies": {
-    "@agent-ops/sdk": "workspace:*",
+    "agent-ops-sdk": "workspace:*",
     "openai": "7.62.0"
   },
   "devDependencies": {

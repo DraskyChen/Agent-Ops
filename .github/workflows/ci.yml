@@ -21,8 +21,62 @@ jobs:
         run: pnpm install --frozen-lockfile
       - name: Run quality gates
         run: pnpm check
+      - name: Verify installable SDK packages
+        run: pnpm sdk:verify
+      - uses: actions/upload-artifact@v4
+        with:
+          name: sdk-packages
+          path: artifacts/sdk
+          if-no-files-found: error
       - name: Build Web
         run: pnpm --filter @agent-ops/web build
+
+  sdk-node20:
+    needs: quality
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+      - uses: actions/download-artifact@v4
+        with:
+          name: sdk-packages
+          path: artifacts/sdk
+      - name: Smoke-test npm package on Node.js 20
+        run: |
+          TEMP_DIR="$(mktemp -d)"
+          cd "$TEMP_DIR"
+          npm init -y
+          npm install "$GITHUB_WORKSPACE/artifacts/sdk/npm/"*.tgz
+          cp "$GITHUB_WORKSPACE/scripts/sdk-smoke/typescript.mjs" smoke.mjs
+          node smoke.mjs success
+          node smoke.mjs failure
+
+  sdk-python:
+    needs: quality
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        python-version:
+          - "3.11"
+          - "3.12"
+          - "3.13"
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python-version }}
+      - uses: actions/download-artifact@v4
+        with:
+          name: sdk-packages
+          path: artifacts/sdk
+      - name: Smoke-test Python wheel
+        run: |
+          python -m venv .venv
+          .venv/bin/pip install artifacts/sdk/python/*.whl
+          .venv/bin/python scripts/sdk-smoke/python.py success
+          .venv/bin/python scripts/sdk-smoke/python.py failure
 
   integration:
     runs-on: ubuntu-latest

@@ -8,7 +8,7 @@
   "scripts": {
     "architecture:check": "node scripts/check-architecture.mjs",
     "build": "pnpm -r --workspace-concurrency=1 --if-present build",
-    "check": "pnpm typecheck && pnpm architecture:check && pnpm test && pnpm lint:python && pnpm typecheck:python && pnpm test:python",
+    "check": "pnpm typecheck && pnpm architecture:check && pnpm sdk:check && pnpm test && pnpm lint:python && pnpm typecheck:python && pnpm test:python",
     "capacity:test": "pnpm --filter @agent-ops/server capacity:test",
     "contracts:build": "pnpm --filter @agent-ops/contracts build",
     "contracts:generate": "pnpm --filter @agent-ops/contracts generate",
@@ -27,6 +27,8 @@
     "release:up": "docker compose --env-file .env.production -f infra/docker-compose/compose.production.yaml up -d",
     "release:down": "docker compose --env-file .env.production -f infra/docker-compose/compose.production.yaml down",
     "release:smoke": "sh infra/release/smoke.sh",
+    "sdk:check": "node scripts/check-sdk-release.mjs",
+    "sdk:verify": "node scripts/verify-sdk-packages.mjs",
     "backup": "sh infra/backup/backup.sh",
     "restore": "sh infra/backup/restore.sh",
     "metrics:backfill": "pnpm --filter @agent-ops/worker metrics:backfill",
@@ -36,7 +38,7 @@
     "test": "pnpm -r --if-present test",
     "test:integration": "pnpm --filter @agent-ops/server test:integration",
     "test:python": "uv run --project packages/sdk-python --extra dev pytest -q",
-    "typecheck": "pnpm contracts:build && pnpm --filter @agent-ops/metrics build && pnpm --filter @agent-ops/sdk build && pnpm -r --workspace-concurrency=1 --if-present typecheck",
+    "typecheck": "pnpm contracts:build && pnpm --filter @agent-ops/metrics build && pnpm --filter agent-ops-sdk build && pnpm -r --workspace-concurrency=1 --if-present typecheck",
     "typecheck:python": "uv run --project packages/sdk-python --extra dev mypy packages/sdk-python/src/agent_ops"
   }
 }

@@ -1,5 +1,6 @@
 import {
   ATTR,
+  SDK_VERSION,
   configureTracing,
   redact,
   shutdownTracing,
@@ -31,6 +32,10 @@ afterAll(async () => {
 });
 
 describe("Agent Ops TypeScript SDK", () => {
+  it("exposes the packaged SDK version", () => {
+    expect(SDK_VERSION).toBe("0.1.0");
+  });
+
   it("creates one trace for the run, LLM call, and failed tool call", async () => {
     exporter.reset();
 
@@ -74,6 +79,7 @@ describe("Agent Ops TypeScript SDK", () => {
     const llm = requiredSpan(spans, "chat");
     const tool = requiredSpan(spans, "query_order");
 
+    expect(root.resource.attributes["agent.sdk.version"]).toBe(SDK_VERSION);
     expect(root.attributes[ATTR.agentSpanType]).toBe("agent.run");
     expect(root.attributes[ATTR.agentRunStatus]).toBe("success");
     expect(root.attributes[ATTR.agentRunStopReason]).toBe("final_answer");

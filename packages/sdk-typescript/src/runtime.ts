@@ -1,7 +1,3 @@
-import {
-  SDK_NAME,
-  type Environment,
-} from "@agent-ops/contracts";
 import { trace, type Tracer } from "@opentelemetry/api";
 import { OTLPTraceExporter } from "@opentelemetry/exporter-trace-otlp-proto";
 import { resourceFromAttributes } from "@opentelemetry/resources";
@@ -13,6 +9,12 @@ import {
 } from "@opentelemetry/sdk-trace";
 
 import { configureContentCapture } from "./content.js";
+import {
+  SCHEMA_VERSION,
+  SDK_NAME,
+  type Environment,
+} from "./generated.js";
+import { SDK_VERSION } from "./version.js";
 
 export interface TracingConfig {
   serviceName: string;
@@ -51,8 +53,8 @@ export async function configureTracing(config: TracingConfig): Promise<void> {
     "deployment.environment.name": config.environment,
     "agent.app.name": config.appName,
     "agent.sdk.name": SDK_NAME,
-    "agent.sdk.version": "0.1.0",
-    "agent.schema.version": "0.1",
+    "agent.sdk.version": SDK_VERSION,
+    "agent.schema.version": SCHEMA_VERSION,
     ...(config.team === undefined ? {} : { "agent.team": config.team }),
   });
 
@@ -98,7 +100,7 @@ export async function configureTracing(config: TracingConfig): Promise<void> {
 }
 
 export function getAgentTracer(): Tracer {
-  return trace.getTracer(SDK_NAME, "0.1.0");
+  return trace.getTracer(SDK_NAME, SDK_VERSION);
 }
 
 export async function shutdownTracing(): Promise<void> {

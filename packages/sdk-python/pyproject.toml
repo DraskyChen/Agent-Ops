@@ -1,18 +1,39 @@
 [build-system]
-requires = ["setuptools>=75"]
+requires = ["setuptools>=77"]
 build-backend = "setuptools.build_meta"
 
 [project]
 name = "agent-ops-sdk"
-version = "0.1.0"
+dynamic = ["version"]
 description = "Thin OpenTelemetry SDK for Agent Ops"
+readme = "README.md"
 requires-python = ">=3.11"
+license = "Apache-2.0"
+license-files = ["LICENSE"]
+authors = [
+  { name = "Agent Ops Contributors" },
+]
+keywords = ["agent", "observability", "opentelemetry", "tracing", "llm"]
+classifiers = [
+  "Development Status :: 3 - Alpha",
+  "Intended Audience :: Developers",
+  "Programming Language :: Python :: 3",
+  "Programming Language :: Python :: 3.11",
+  "Programming Language :: Python :: 3.12",
+  "Programming Language :: Python :: 3.13",
+  "Typing :: Typed",
+]
 dependencies = [
   "opentelemetry-api>=1.38,<2",
   "opentelemetry-sdk>=1.38,<2",
   "opentelemetry-exporter-otlp-proto-http>=1.38,<2",
   "requests>=2.32,<3",
 ]
+
+[project.urls]
+Homepage = "https://github.com/DraskyChen/Agent-Ops#readme"
+Repository = "https://github.com/DraskyChen/Agent-Ops"
+Issues = "https://github.com/DraskyChen/Agent-Ops/issues"
 
 [project.optional-dependencies]
 dev = [
@@ -23,6 +44,9 @@ dev = [
 
 [tool.setuptools.packages.find]
 where = ["src"]
+
+[tool.setuptools.dynamic]
+version = { attr = "agent_ops._version.__version__" }
 
 [tool.setuptools.package-data]
 agent_ops = ["py.typed"]

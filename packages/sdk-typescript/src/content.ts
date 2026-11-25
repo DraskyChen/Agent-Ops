@@ -1,10 +1,18 @@
-import type {
-  ContentRecorded,
-  ContentUploadRequest,
-  ContentUploadResponse,
-} from "@agent-ops/contracts";
-
 import { redact, REDACTION_RULE_VERSION } from "./attributes.js";
+import type { ContentRecorded } from "./generated.js";
+
+interface ContentUploadRequest {
+  ownerApp: string;
+  contentKind: string;
+  mediaType: string;
+  captureMode: ContentRecorded;
+  redactionRuleVersion: string;
+  content: string;
+}
+
+interface ContentUploadResponse {
+  contentId?: string;
+}
 
 export interface ContentCaptureConfig {
   enabled: boolean;
