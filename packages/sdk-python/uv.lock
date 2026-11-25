@@ -7,7 +7,7 @@ resolution-markers = [
 ]
 
 [[package]]
-name = "agent-ops-sdk"
+name = "agent-ops-otel-sdk"
 source = { editable = "." }
 dependencies = [
     { name = "opentelemetry-api" },

@@ -9,7 +9,7 @@ Before the first tag release:
 
 1. Make this source repository public. npm provenance requires the repository
    referenced by `package.json` to be publicly accessible.
-2. Confirm `agent-ops-sdk` is still available on npm and PyPI.
+2. Confirm `agent-ops-otel-sdk` is still available on npm and PyPI.
 3. Configure npm Trusted Publishing for this repository and workflow.
 4. Configure a PyPI pending/trusted publisher for this repository, workflow,
    and the `sdk-release` GitHub environment.
@@ -52,18 +52,18 @@ the existing release.
 Run the package checks from a clean machine:
 
 ```bash
-mkdir -p /tmp/agent-ops-sdk-check-npm
-cd /tmp/agent-ops-sdk-check-npm
+mkdir -p /tmp/agent-ops-otel-sdk-check-npm
+cd /tmp/agent-ops-otel-sdk-check-npm
 npm init -y
-npm install agent-ops-sdk@0.1.0
-node --input-type=module -e "import { SDK_VERSION } from 'agent-ops-sdk'; console.log(SDK_VERSION)"
-python -m venv /tmp/agent-ops-sdk-check-python
-/tmp/agent-ops-sdk-check-python/bin/pip install agent-ops-sdk==0.1.0
-/tmp/agent-ops-sdk-check-python/bin/python -c "import agent_ops; print(agent_ops.__version__)"
+npm install agent-ops-otel-sdk@0.1.0
+node --input-type=module -e "import { SDK_VERSION } from 'agent-ops-otel-sdk'; console.log(SDK_VERSION)"
+python -m venv /tmp/agent-ops-otel-sdk-check-python
+/tmp/agent-ops-otel-sdk-check-python/bin/pip install agent-ops-otel-sdk==0.1.0
+/tmp/agent-ops-otel-sdk-check-python/bin/python -c "import agent_ops; print(agent_ops.__version__)"
 ```
 
 The authoritative npm metadata check is:
 
 ```bash
-npm view agent-ops-sdk@0.1.0 version license repository.url
+npm view agent-ops-otel-sdk@0.1.0 version license repository.url
 ```

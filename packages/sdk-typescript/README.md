@@ -10,7 +10,7 @@ OpenTelemetry tracing helpers for Node.js agents that send traces to Agent Ops.
 ## Install
 
 ```bash
-npm install agent-ops-sdk
+npm install agent-ops-otel-sdk
 ```
 
 The package is ESM-only and does not support browser runtimes.
@@ -24,7 +24,7 @@ import {
   withAgentRun,
   withLlmCall,
   withToolCall,
-} from "agent-ops-sdk";
+} from "agent-ops-otel-sdk";
 
 await configureTracing({
   serviceName: "support-agent",

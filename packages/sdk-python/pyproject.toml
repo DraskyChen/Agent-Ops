@@ -3,7 +3,7 @@ requires = ["setuptools>=77"]
 build-backend = "setuptools.build_meta"
 
 [project]
-name = "agent-ops-sdk"
+name = "agent-ops-otel-sdk"
 dynamic = ["version"]
 description = "Thin OpenTelemetry SDK for Agent Ops"
 readme = "README.md"

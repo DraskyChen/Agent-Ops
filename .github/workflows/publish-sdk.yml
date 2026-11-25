@@ -106,9 +106,9 @@ jobs:
       - name: Publish npm package
         run: |
           VERSION="${GITHUB_REF_NAME#sdk-v}"
-          TARBALL="$(find artifacts/sdk/npm -name 'agent-ops-sdk-*.tgz' -print -quit)"
-          if npm view "agent-ops-sdk@$VERSION" version >/dev/null 2>&1; then
-            echo "agent-ops-sdk@$VERSION is already published."
+          TARBALL="$(find artifacts/sdk/npm -name 'agent-ops-otel-sdk-*.tgz' -print -quit)"
+          if npm view "agent-ops-otel-sdk@$VERSION" version >/dev/null 2>&1; then
+            echo "agent-ops-otel-sdk@$VERSION is already published."
             exit 0
           fi
           npm publish "$TARBALL" --access public --provenance --ignore-scripts

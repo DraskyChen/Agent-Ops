@@ -1,4 +1,4 @@
-import { shutdownTracing } from "agent-ops-sdk";
+import { shutdownTracing } from "agent-ops-otel-sdk";
 
 import { runDeepSeekExample } from "./deepseek.js";
 import { runMultiAgentExample } from "./multi-agent.js";

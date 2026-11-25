@@ -273,7 +273,7 @@ importers:
 
   examples/typescript:
     dependencies:
-      agent-ops-sdk:
+      agent-ops-otel-sdk:
         specifier: workspace:*
         version: link:../../packages/sdk-typescript
       openai:

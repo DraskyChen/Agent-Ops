@@ -84,7 +84,7 @@ for (const file of files) {
     imports.some(
       (specifier) =>
         specifier.startsWith("../../apps/") ||
-        specifier === "agent-ops-sdk",
+        specifier === "agent-ops-otel-sdk",
     )
   ) {
     fail(relativeFile, 1, "contracts must not depend on apps or SDK packages");

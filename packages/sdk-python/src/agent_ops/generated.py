@@ -4,7 +4,7 @@ from enum import StrEnum
 
 SCHEMA_VERSION = "0.1"
 NAMESPACE_PREFIX = "agent"
-SDK_NAME = "agent-ops-sdk"
+SDK_NAME = "agent-ops-otel-sdk"
 
 
 class ContentRecorded(StrEnum):

@@ -18,7 +18,7 @@ const sdkContractsSource = await readText(
   "packages/sdk-typescript/src/generated.ts",
 );
 
-assertEqual(typescriptPackage.name, "agent-ops-sdk", "TypeScript package name");
+assertEqual(typescriptPackage.name, "agent-ops-otel-sdk", "TypeScript package name");
 assertEqual(typescriptPackage.private, undefined, "TypeScript private flag");
 assertEqual(
   typescriptPackage.license,
@@ -53,7 +53,7 @@ assertMatches(
 
 assertMatches(
   pythonProject,
-  /^name = "agent-ops-sdk"$/m,
+  /^name = "agent-ops-otel-sdk"$/m,
   "Python package name",
 );
 assertMatches(pythonProject, /^dynamic = \["version"\]$/m, "Python dynamic version");
@@ -92,7 +92,7 @@ if (tag?.startsWith("sdk-v")) {
 }
 
 process.stdout.write(
-  `SDK release metadata passed: agent-ops-sdk ${typescriptPackage.version}.\n`,
+  `SDK release metadata passed: agent-ops-otel-sdk ${typescriptPackage.version}.\n`,
 );
 
 async function readJson(relativePath) {

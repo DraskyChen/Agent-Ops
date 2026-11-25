@@ -12,7 +12,7 @@ import {
   withAgentRun,
   withLlmCall,
   withToolCall,
-} from "agent-ops-sdk";
+} from "agent-ops-otel-sdk";
 
 const mode = process.argv[2] ?? "success";
 assert.ok(mode === "success" || mode === "failure", `Unknown mode ${mode}`);
