@@ -19,7 +19,7 @@ const pythonPackageDir = path.join(root, "packages/sdk-python");
 const artifactsDir = path.join(root, "artifacts/sdk");
 const npmArtifactsDir = path.join(artifactsDir, "npm");
 const pythonArtifactsDir = path.join(artifactsDir, "python");
-const tempRoot = await mkdtemp(path.join(tmpdir(), "agent-ops-sdk-verify-"));
+const tempRoot = await mkdtemp(path.join(tmpdir(), "agent-ops-otel-sdk-verify-"));
 const commandEnvironment = {
   ...process.env,
   npm_config_cache: path.join(tempRoot, "npm-cache"),
@@ -37,7 +37,7 @@ try {
   run("pnpm", ["contracts:build"], { env: commandEnvironment });
   run(
     "pnpm",
-    ["--filter", "agent-ops-sdk", "build"],
+    ["--filter", "agent-ops-otel-sdk", "build"],
     { env: commandEnvironment },
   );
 
@@ -90,7 +90,7 @@ async function verifyNpmArchive(archive) {
     {},
   );
   const packageJson = JSON.parse(packageJsonSource);
-  assertEqual(packageJson.name, "agent-ops-sdk", "npm package name");
+  assertEqual(packageJson.name, "agent-ops-otel-sdk", "npm package name");
   assertEqual(packageJson.private, undefined, "npm private flag");
   assertEqual(packageJson.license, "Apache-2.0", "npm license");
   if (JSON.stringify(packageJson.dependencies ?? {}).includes("workspace:")) {
@@ -114,13 +114,13 @@ async function verifyNpmArchive(archive) {
 async function verifyPythonArtifacts(wheel, sourceArchive) {
   const wheelFiles = command("unzip", ["-Z1", wheel], {}).split("\n");
   const metadataPath = wheelFiles.find((file) =>
-    /agent_ops_sdk-[^/]+\.dist-info\/METADATA$/.test(file),
+    /agent_ops_otel_sdk-[^/]+\.dist-info\/METADATA$/.test(file),
   );
   if (metadataPath === undefined) {
     throw new Error("Python wheel is missing package metadata");
   }
   const metadata = command("unzip", ["-p", wheel, metadataPath], {});
-  assertIncludes(metadata, "\nName: agent-ops-sdk\n", "Python package name");
+  assertIncludes(metadata, "\nName: agent-ops-otel-sdk\n", "Python package name");
   assertIncludes(
     metadata,
     "\nLicense-File: LICENSE\n",
@@ -148,7 +148,7 @@ async function verifyPythonArtifacts(wheel, sourceArchive) {
   const sourceFiles = command("tar", ["-tzf", sourceArchive], {}).split("\n");
   if (
     !sourceFiles.some((file) =>
-      /^agent_ops_sdk-[^/]+\/LICENSE$/.test(file),
+      /^agent_ops_otel_sdk-[^/]+\/LICENSE$/.test(file),
     )
   ) {
     throw new Error("Python source distribution is missing LICENSE");

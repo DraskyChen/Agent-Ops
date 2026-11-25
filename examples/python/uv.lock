@@ -7,20 +7,20 @@ name = "agent-ops-python-examples"
 version = "0.1.0"
 source = { editable = "." }
 dependencies = [
-    { name = "agent-ops-sdk" },
+    { name = "agent-ops-otel-sdk" },
     { name = "openai" },
     { name = "python-dotenv" },
 ]
 
 [package.metadata]
 requires-dist = [
-    { name = "agent-ops-sdk", editable = "../../packages/sdk-python" },
+    { name = "agent-ops-otel-sdk", editable = "../../packages/sdk-python" },
     { name = "openai", specifier = ">=2,<3" },
     { name = "python-dotenv", specifier = ">=1.1,<2" },
 ]
 
 [[package]]
-name = "agent-ops-sdk"
+name = "agent-ops-otel-sdk"
 version = "0.1.0"
 source = { editable = "../../packages/sdk-python" }
 dependencies = [

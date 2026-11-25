@@ -149,8 +149,8 @@ uv run --project packages/sdk-python mypy packages/sdk-python/src/agent_ops
 The TypeScript and Python SDKs are independently installable:
 
 ```bash
-npm install agent-ops-sdk
-pip install agent-ops-sdk
+npm install agent-ops-otel-sdk
+pip install agent-ops-otel-sdk
 ```
 
 The npm package is ESM-only and requires Node.js 20 or newer. The Python package

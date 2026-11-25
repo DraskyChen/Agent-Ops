@@ -1,5 +1,5 @@
 {
-  "name": "agent-ops-sdk",
+  "name": "agent-ops-otel-sdk",
   "version": "0.1.0",
   "description": "OpenTelemetry tracing SDK for Agent Ops",
   "license": "Apache-2.0",

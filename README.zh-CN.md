@@ -135,8 +135,8 @@ uv run --project packages/sdk-python mypy packages/sdk-python/src/agent_ops
 TypeScript 和 Python SDK 都支持独立安装：
 
 ```bash
-npm install agent-ops-sdk
-pip install agent-ops-sdk
+npm install agent-ops-otel-sdk
+pip install agent-ops-otel-sdk
 ```
 
 npm 包仅支持 ESM，需要 Node.js 20 或更高版本；Python 包需要 Python 3.11
