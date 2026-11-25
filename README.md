@@ -146,17 +146,20 @@ uv run --project packages/sdk-python mypy packages/sdk-python/src/agent_ops
 
 ## SDK packages
 
+Version `0.1.0` is published to npm, PyPI, and the
+[GitHub Release](https://github.com/DraskyChen/Agent-Ops/releases/tag/sdk-v0.1.0).
 The TypeScript and Python SDKs are independently installable:
 
 ```bash
-npm install agent-ops-otel-sdk
-pip install agent-ops-otel-sdk
+npm install agent-ops-otel-sdk@0.1.0
+pip install agent-ops-otel-sdk==0.1.0
 ```
 
 The npm package is ESM-only and requires Node.js 20 or newer. The Python package
 requires Python 3.11 or newer. Both packages expose the same `0.1` telemetry
-contract and are released together under `sdk-v*` tags. See the
-[SDK release runbook](docs/sdk-release.md) for registry and release details.
+contract and are released together under `sdk-v*` tags. The Python import name
+is `agent_ops`. See the [SDK release runbook](docs/sdk-release.md) for registry
+links, compatibility, checksums, and maintenance procedures.
 
 Run the platform:
 

@@ -10,6 +10,10 @@
 5. Confirm OIDC callback `OIDC_REDIRECT_URI` points to `/auth/callback` behind
    the final TLS hostname.
 
+SDK packages are released independently from the platform. Their current
+version, registry links, compatibility, trust configuration, and release
+history are documented in the [SDK release runbook](sdk-release.md).
+
 ## Deploy
 
 ```bash
