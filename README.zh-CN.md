@@ -1,96 +1,91 @@
-# Agent Ops
+<div align="center">
+  <img src="./.github/assets/readme-hero.png" width="100%" alt="Agent Ops——看清完整 Agent 运行，而不只是一次请求" />
+</div>
 
-[English](README.md)
+<h1 align="center">Agent Ops</h1>
 
-Agent Ops 是一个私有化部署的 Agent 运行可观测平台。
+<p align="center">
+  <strong>面向 AI Agent 的私有化可观测与评测平台。</strong><br />
+  追踪每次运行，定位失败步骤，沉淀为数据集，<br />
+  在下一次发布前验证改动。
+</p>
 
-第一个里程碑是完成一条端到端纵向链路：
+<p align="center">
+  <a href="README.md">English</a> ·
+  <a href="#快速开始">快速开始</a> ·
+  <a href="#架构">架构</a> ·
+  <a href="#文档">文档</a>
+</p>
+
+<p align="center">
+  <a href="https://github.com/DraskyChen/Agent-Ops/actions/workflows/ci.yml">
+    <img src="https://github.com/DraskyChen/Agent-Ops/actions/workflows/ci.yml/badge.svg" alt="CI 状态" />
+  </a>
+  <a href="https://www.npmjs.com/package/agent-ops-otel-sdk">
+    <img src="https://img.shields.io/npm/v/agent-ops-otel-sdk.svg?label=npm" alt="npm 版本" />
+  </a>
+  <a href="https://pypi.org/project/agent-ops-otel-sdk/">
+    <img src="https://img.shields.io/pypi/v/agent-ops-otel-sdk.svg?label=PyPI" alt="PyPI 版本" />
+  </a>
+  <img src="https://img.shields.io/badge/status-0.1%20alpha-f98488" alt="状态：0.1 alpha" />
+  <a href="LICENSE">
+    <img src="https://img.shields.io/badge/license-Apache--2.0-blue.svg" alt="Apache-2.0 许可证" />
+  </a>
+</p>
+
+Agent Ops 把一次完整的 Agent 运行呈现为一条 Trace：模型调用、工具调用、
+检索、规划和子 Agent 都在同一棵执行树中。你可以从失败或低质量的运行出发，
+定位具体步骤，将其整理为数据集，发起评测，并在发布前比较版本回归。
 
 ```text
-TypeScript 或 Python Agent
-  -> 轻量 Agent Ops SDK
-  -> OpenTelemetry SDK
-  -> OTLP 接入
-  -> PostgreSQL 和对象存储
-  -> Trace 列表、Trace 树和完整内容查看
+观测  →  审查  →  沉淀数据  →  评测  →  对比  →  改进
 ```
 
-设计文档：
+## 为什么选择 Agent Ops
 
-- [架构设计](docs/architecture.zh-CN.md)
-- [代码架构](docs/code-architecture.zh-CN.md)
-- [模型价格](docs/pricing.md)
-- [Architecture（英文）](docs/architecture.md)
+**看到完整执行树，而不是彼此割裂的日志。** 从根 Agent 一直追踪到每次
+LLM 调用、Tool 调用、检索和子 Agent，在同一上下文中查看耗时、Token、
+成本、状态和错误。
 
-## 当前实现状态
+**应用凭证与人的身份边界分开。** SDK 使用独立的机器凭证；控制台使用
+OIDC、角色权限、显式内容查看权限、访问审计和保留策略。
 
-已完成：
+**从生产问题闭环到回归测试。** 负反馈、未解决 Review、运行失败和评测失败
+都能成为候选数据。创建不可变数据集修订，运行规则或 LLM Judge，并在同一
+修订上比较两次运行。
 
-- 机器可读的 Contracts v0.1，以及生成的 TypeScript、Python 常量和枚举。
-- 基于官方 OpenTelemetry SDK 的 Node.js TypeScript SDK 和 Python SDK 骨架。
-- Agent 运行、LLM、工具、检索和子 Agent 的 Span 封装。
-- 统一的脱敏和属性约定。
-- 基于 OpenTelemetry Proto `v1.11.1` 的 OTLP/HTTP protobuf 接入。
-- PostgreSQL 持久化，以及 Worker 中的 Trace 聚合与分段封口。
-- 服务端 Trace 组合筛选和稳定游标分页。
-- 由 MinIO 支撑的服务端代理完整内容上传与读取。
-- TypeScript 和 Python SDK 完整内容捕获及 Span `content_id` 关联。
-- 使用应用凭证写入、按事件幂等的用户 Feedback。
-- 带审核人身份和问题分类的追加式内部 Review。
-- OIDC 登录、本地开发身份，以及 `viewer`、`reviewer`、`admin` 角色。
-- 内容访问审计、过期清理和独立的内容查看权限。
-- Ingest 健康状态、拒收原因、聚合积压和 Web Operations 页面。
-- 基于 PostgreSQL 小时汇总和延迟直方图的共享 Trace 指标定义。
-- 展示数量、状态、成本、延迟、工具错误以及应用/模型/任务/版本分布的运维 Dashboard。
-- 支持从 Dashboard 按同一时间桶和结构化筛选条件下钻到 Trace 列表。
-- 真实 Trace 列表、详情、审查和内容查看控制台。
-- TypeScript/Python SDK 的可选 `agent.eval.case_id`，用于跨版本严格配对。
-- 从已封口 Trace 创建不可变数据集修订，并复制输入、基线和期望输出内容。
-- 评测运行 API、按 `case_id` 匹配候选 Trace，以及精确、包含、正则、
-  JSON、延迟、成本和工具错误规则评测。
-- Dataset 和 Evaluation 控制台，支持创建修订、发起规则评测、自动刷新
-  运行状态和查看逐用例结果。
-- 管理员启用的 DeepSeek LLM Judge，固定结构化评分、外发确认、
-  Prompt/响应审计、Token 用量和失败重试。
-- 同一数据集修订、同一评测器版本的双运行对比，展示通过率、平均分、
-  成本、P95 延迟和逐用例差值。
-- 从 Trace 手动加入数据集、切换修订历史、并排查看内容与跨修订差异。
-- 可复用评测器模板、历史配置复用、逐用例 Trace/Dataset 跳转和
-  Judge Prompt/响应审计查看。
-- 负反馈、未解决 Review、运行失败和评测失败 Trace 的候选数据发现页，
-  支持人工忽略与恢复。
-- Trace Waterfall、Span 搜索/错误过滤、可分享 Trace 链接、Session 目录
-  与运行时间线。
-- 只读 Prompt Registry，支持 Prompt 版本元数据、生命周期审计，以及
-  Trace/Dataset/Evaluation 关联统计。
-- 完整 Trace 内容的复制和下载，并在下载前提示访问审计与数据保留边界。
-- 单团队生产 Compose、多阶段应用镜像、Nginx 反向代理和自动迁移服务；
-  镜像实际构建仍需可访问 Docker Hub 的环境。
-- 独立数据库中的每天 100 万 Span 写入、列表、宽泛搜索、详情和存储基线。
-- 带 SHA-256 完整性校验的 PostgreSQL/MinIO 备份脚本、显式确认的完整恢复
-  脚本，以及开发环境真实恢复演练。
-- CI 质量/集成/镜像构建流水线、生产配置占位符检查、发布冒烟脚本和
-  OIDC/SDK/备份/回滚运行手册。
-- 独立的 PostgreSQL 和 MinIO 开发环境。
+**基于开放标准，也能完全私有化。** 两个 SDK 都基于官方 OpenTelemetry SDK，
+通过 OTLP/HTTP 上报。PostgreSQL 是系统记录，MinIO 或任意兼容 S3 的对象
+存储保存完整内容。
 
-尚未完成：
+<div align="center">
+  <img src="./.github/assets/trace-detail.png" width="100%" alt="Agent Ops Trace 详情：父 Agent、LLM Span、失败工具调用、成本、Token 和输入内容" />
+  <sub>失败的 Tool 调用仍然和父 Agent、成本、Token、输入内容保持关联。</sub>
+</div>
 
-- 容器构建与启动验收、30 天热数据/OTLP 并发压测、正式环境 RPO/RTO
-  与异地备份验收、正式上线验收。
+## 快速开始
 
-## 本地开发
+### 环境要求
+
+- Node.js 24+ 和 pnpm 12+
+- Docker 与 Compose
+- 仅在开发 Python SDK 时需要 Python 3.11+
 
 ```bash
+git clone https://github.com/DraskyChen/Agent-Ops.git
+cd Agent-Ops
+cp .env.example .env
+
 pnpm install
 pnpm contracts:build
-pnpm architecture:check
 pnpm infra:up
 pnpm db:migrate
 pnpm metrics:backfill
-pnpm typecheck
-pnpm test
-pnpm test:integration
+pnpm dev
 ```
+
+打开 [http://localhost:3000/console](http://localhost:3000/console)。本地开发
+默认使用 `AGENT_OPS_AUTH_MODE=dev`，生产环境必须使用 OIDC。
 
 如果 Docker 使用非默认 Context：
 
@@ -98,93 +93,197 @@ pnpm test:integration
 DOCKER_CONTEXT=orbstack pnpm infra:up
 ```
 
-`pnpm test:integration` 需要已执行迁移的 PostgreSQL 和 MinIO 开发环境，
-用于真实验证筛选、Feedback 幂等、Review、运维健康、过期内容审计、指标汇总和
-Dashboard 查询。
-
-`pnpm metrics:backfill` 从 Trace 投影重建小时指标；可用 `--from` 和 `--to`
-ISO 时间限制回填范围。
-
-`pnpm metrics:load-test` 必须显式设置 `METRICS_LOAD_TEST_DATABASE_URL`，
-并让 API 连接同一个一次性数据库，避免污染开发数据。
-
-`pnpm capacity:test` 使用 `CAPACITY_TEST_DATABASE_URL` 对一次性数据库执行
-Trace/Span 写入、列表、宽泛搜索和详情查询压测。默认目标为 100 万 Span，
-测试数据会自动清理；结果与限制见 [容量基线](docs/capacity.md)。
-
-备份与恢复命令：
+想立刻看到真实数据，可以运行内置示例：
 
 ```bash
+pnpm examples:ts
+# 或
+pnpm examples:python
+```
+
+## 接入第一条 Trace
+
+安装 TypeScript SDK：
+
+```bash
+npm install agent-ops-otel-sdk@0.1.0
+```
+
+```ts
+import {
+  configureTracing,
+  shutdownTracing,
+  withAgentRun,
+  withLlmCall,
+  withToolCall,
+} from "agent-ops-otel-sdk";
+
+await configureTracing({
+  serviceName: "support-agent",
+  serviceVersion: "1.4.0",
+  appName: "customer-support",
+  environment: "prod",
+  endpoint: "https://agent-ops.example.com/v1/traces",
+  headers: {
+    authorization: `Bearer ${process.env.AGENT_OPS_INGEST_TOKEN}`,
+  },
+});
+
+try {
+  await withAgentRun(
+    {
+      sessionId: "session-123",
+      taskType: "support",
+      inputSummary: "Resolve a duplicate subscription",
+    },
+    async (run) => {
+      await withLlmCall(
+        {
+          provider: "deepseek",
+          requestModel: "deepseek-flash",
+          inputTokens: 420,
+          outputTokens: 80,
+        },
+        async () => "Call the subscription tool.",
+      );
+
+      await withToolCall(
+        {
+          name: "cancel_subscription",
+          argsSummary: '{"subscriptionId":"sub-b"}',
+        },
+        async () => ({ cancelled: true }),
+      );
+
+      run.complete("success", "final_answer");
+    },
+  );
+} finally {
+  await shutdownTracing();
+}
+```
+
+需要保存完整 Prompt 和响应时，设置 `contentCapture: "full"` 并提供
+`contentToken`。成功、Tool 失败、检索、多 Agent 和 DeepSeek 的示例见
+[examples](examples/README.md)。
+
+## SDK
+
+两个 SDK 使用相同的 `0.1` 遥测契约。
+
+| 运行时 | 安装 | 导入名 | 发布地址 |
+| --- | --- | --- | --- |
+| TypeScript / Node.js 20+ | `npm install agent-ops-otel-sdk@0.1.0` | `agent-ops-otel-sdk` | [npm](https://www.npmjs.com/package/agent-ops-otel-sdk) |
+| Python 3.11+ | `pip install agent-ops-otel-sdk==0.1.0` | `agent_ops` | [PyPI](https://pypi.org/project/agent-ops-otel-sdk/0.1.0/) |
+
+npm 包仅支持 ESM。两个包都会在最低支持运行时上做 Smoke Test，并通过
+`sdk-v*` GitHub 标签同步发布。
+
+- [TypeScript SDK 指南](packages/sdk-typescript/README.md)
+- [Python SDK 指南](packages/sdk-python/README.md)
+- [SDK 发布与兼容性手册](docs/sdk-release.md)
+
+## 功能范围
+
+| 观测 | 改进 | 运维 |
+| --- | --- | --- |
+| Trace 搜索、执行树、Waterfall、Span 错误、Session | 候选数据发现与内部 Trace Review | OIDC 与 viewer / reviewer / admin 角色 |
+| 数量、状态、成本、延迟和工具错误 Dashboard | 不可变数据集、规则评测和 DeepSeek LLM Judge | 内容权限、访问审计和过期清理 |
+| 完整内容查看与可分享 Trace 链接 | 同一数据集上的双运行对比与逐用例差值 | PostgreSQL / MinIO 备份和恢复演练 |
+| 带生命周期与审计记录的 Prompt Registry | 评测器模板与历史配置复用 | 单团队生产 Compose 与自动迁移 |
+
+## 架构
+
+```mermaid
+flowchart LR
+  Agent["Agent 应用"] --> SDK["TypeScript / Python SDK"]
+  SDK --> OTel["OpenTelemetry SDK"]
+  OTel -->|"OTLP / HTTP"| Ingest["Ingest API"]
+  Ingest --> PG[("PostgreSQL")]
+  Ingest --> S3[("S3 / MinIO")]
+  Console["Agent Ops 控制台"] --> Query["Query API"]
+  Query --> PG
+  Query --> S3
+  Worker["Worker"] --> PG
+  Worker --> S3
+```
+
+首个部署是模块化单体，包含 `web`、`server` 和 `worker` 三个进程。
+PostgreSQL 是初始系统记录；持久化边界允许在实测查询量需要时迁移 Trace
+存储。Ingest 和 Query 保持独立模块，并拥有不同的信任边界。
+
+设计决策和受约束的模块边界见[架构设计](docs/architecture.zh-CN.md)与
+[代码架构](docs/code-architecture.zh-CN.md)。
+
+### 生产 Compose
+
+```bash
+cp .env.production.example .env.production
+
+pnpm release:config
+pnpm release:build
+pnpm release:up
+```
+
+`migrate` 服务会在 Server 和 Worker 之前运行。Web 默认监听
+`http://127.0.0.1:8080`，MinIO 管理端只绑定本机 `9001`。部署前请阅读
+[发布运行手册](docs/release-runbook.md)。
+
+## 项目状态
+
+Agent Ops 当前为 **0.1 alpha（预生产）**。从 Trace 到评测的核心纵向链路已经
+实现，并使用真实 PostgreSQL 和 MinIO 依赖完成验证。
+
+当前已具备：
+
+- OTLP 接入、Trace 聚合、查询、内容存储和 TypeScript / Python SDK
+- Dashboard、Trace / Session 查看、Review 和候选数据发现
+- 数据集修订、规则与 LLM 评测、双运行对比和 Prompt Registry
+- OIDC 角色、内容审计与保留、运维健康页和 Compose
+- 已记录的单日 100 万 Span 数据库基线
+- SHA-256 校验备份和已完成的开发环境真实恢复演练
+
+正式生产验收前仍需完成：
+
+- 目标环境中的容器构建与启动验收
+- 30 天热数据和 OTLP 并发压测
+- 正式 RPO / RTO、异地备份和上线验收
+
+## 开发
+
+```bash
+pnpm check
+pnpm test:integration
+pnpm --filter @agent-ops/web build
+```
+
+`pnpm test:integration` 需要已迁移的开发环境，会用真实数据库验证筛选、
+Feedback 幂等、Review、运维健康、过期内容审计、指标汇总和 Dashboard 查询。
+
+容量与恢复命令：
+
+```bash
+CAPACITY_TEST_DATABASE_URL=... pnpm capacity:test
 pnpm backup
 CONFIRM_RESTORE=yes pnpm restore /path/to/agent-ops-snapshot
 ```
 
-恢复会停止应用并完整替换数据库和对象 Bucket。演练结果与生产要求见
-[备份恢复演练](docs/backup-restore.md)。
+恢复会停止应用，并完整替换 PostgreSQL 和对象 Bucket。实测结果与生产要求见
+[容量基线](docs/capacity.md)和[备份恢复演练](docs/backup-restore.md)。
 
-Python SDK：
+## 文档
 
-```bash
-uv sync --project packages/sdk-python --extra dev
-uv run --project packages/sdk-python pytest -q
-uv run --project packages/sdk-python mypy packages/sdk-python/src/agent_ops
-```
+| 主题 | 文档 |
+| --- | --- |
+| 系统设计 | [架构设计](docs/architecture.zh-CN.md) |
+| 模块边界 | [代码架构](docs/code-architecture.zh-CN.md) |
+| 运行 SDK 示例 | [示例](examples/README.md) |
+| 发布兼容 SDK | [SDK 发布](docs/sdk-release.md) |
+| 单团队部署 | [发布运行手册](docs/release-runbook.md) |
+| 查看容量证据 | [容量基线](docs/capacity.md) |
+| 备份与恢复 | [备份恢复演练](docs/backup-restore.md) |
+| 模型价格 | [模型定价](docs/pricing.md) |
 
-## SDK 独立包
+## 许可证
 
-`0.1.0` 已发布到 npm、PyPI 和
-[GitHub Release](https://github.com/DraskyChen/Agent-Ops/releases/tag/sdk-v0.1.0)。
-TypeScript 和 Python SDK 使用相同的发行包名：
-
-```bash
-npm install agent-ops-otel-sdk@0.1.0
-pip install agent-ops-otel-sdk==0.1.0
-```
-
-npm 包仅支持 ESM，需要 Node.js 20 或更高版本；Python 包需要 Python 3.11
-或更高版本。两个包使用相同的 `0.1` 遥测契约，并通过 `sdk-v*` 标签同步发布。
-Python 的导入名保持为 `agent_ops`。Registry、兼容矩阵、校验值和维护流程见
-[SDK 发布手册](docs/sdk-release.md)。
-
-启动平台：
-
-```bash
-pnpm dev
-```
-
-## 单团队容器发布
-
-复制并填写生产配置：
-
-```bash
-cp .env.production.example .env.production
-```
-
-生产配置使用 OIDC，必须设置 `AGENT_OPS_INGEST_TOKEN`、PostgreSQL 和
-对象存储密钥。默认只暴露 Web 入口；SDK 应使用该入口下的
-`https://<host>/v1/traces`。
-
-```bash
-pnpm release:config
-pnpm release:build
-pnpm release:up
-docker compose --env-file .env.production \
-  -f infra/docker-compose/compose.production.yaml ps
-```
-
-`migrate` 服务在 Server 和 Worker 启动前运行。Web 默认监听
-`http://127.0.0.1:8080`，MinIO 管理端只绑定本机 `9001`。
-
-本地默认使用 `AGENT_OPS_AUTH_MODE=dev`。OIDC 模式需要
-`.env.example` 中的 `OIDC_*` 配置；生产环境使用开发身份模式时服务端会拒绝启动。
-
-通过 TypeScript 示例写入真实 Trace：
-
-```bash
-pnpm examples:ts
-```
-
-TypeScript 和 Python 的独立示例见 [examples/README.md](examples/README.md)。
-
-
-
+Apache-2.0，见 [LICENSE](LICENSE)。

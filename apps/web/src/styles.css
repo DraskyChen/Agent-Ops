@@ -1,50 +1,70 @@
 :root,
 :root[data-theme="light"] {
   color-scheme: light;
-  --page-bg: #f5f6f8;
+  --page-bg: #f4f5f5;
   --surface: #ffffff;
   --surface-raised: #ffffff;
-  --surface-muted: #f8f9fb;
-  --surface-hover: #f1f3f6;
-  --text: #171a21;
-  --text-secondary: #5f6673;
-  --text-muted: #8a909c;
-  --border: #e4e7ec;
-  --border-strong: #d5d9e0;
-  --accent: #d46532;
-  --accent-soft: #fdf0e8;
-  --accent-text: #a74820;
-  --success: #16794d;
-  --success-soft: #e9f7ef;
-  --danger: #c83f48;
+  --surface-muted: #f7f8f8;
+  --surface-hover: #eef0ef;
+  --text: #171918;
+  --text-secondary: #5f6364;
+  --text-muted: #878b8e;
+  --border: #e2e5e4;
+  --border-strong: #cfd4d1;
+  --brand-action: #f98488;
+  --brand-action-contrast: #14251d;
+  --brand-action-soft: #fdecee;
+  --brand-action-text: #171918;
+  --data-primary: #2b6d50;
+  --data-secondary: #3f6c85;
+  --data-fill: #76d3a0;
+  --accent: var(--brand-action);
+  --accent-contrast: var(--brand-action-contrast);
+  --accent-soft: var(--brand-action-soft);
+  --accent-text: var(--brand-action-text);
+  --brand-ink: #171918;
+  --brand-on: #76d3a0;
+  --success: #2b6d50;
+  --success-soft: #e9f4df;
+  --danger: #b53a47;
   --danger-soft: #fdeef0;
   --warning: #9a6518;
   --warning-soft: #fff7e6;
-  --info: #2563b8;
-  --info-soft: #eef5ff;
-  --shadow-sm: 0 1px 2px rgb(16 24 40 / 4%);
-  --shadow-md: 0 12px 32px rgb(16 24 40 / 8%);
-  --code-bg: #f6f7f9;
+  --info: #3f6c85;
+  --info-soft: #e7f1f5;
+  --shadow-sm: 0 1px 2px rgb(18 20 19 / 5%);
+  --shadow-md: 0 12px 32px rgb(18 20 19 / 10%);
+  --code-bg: #f4f5f4;
 }
 
 :root[data-theme="dark"] {
   color-scheme: dark;
-  --page-bg: #0d1118;
-  --surface: #121822;
-  --surface-raised: #151c27;
-  --surface-muted: #101620;
-  --surface-hover: #1a2230;
-  --text: #eef1f5;
-  --text-secondary: #a7b0bf;
-  --text-muted: #737e8f;
-  --border: #252e3c;
-  --border-strong: #334052;
-  --accent: #f08a52;
-  --accent-soft: #2b1b14;
-  --accent-text: #ffad7e;
-  --success: #55bf8c;
+  --page-bg: #0b0d0e;
+  --surface: #131615;
+  --surface-raised: #161a18;
+  --surface-muted: #0f1211;
+  --surface-hover: #1c211f;
+  --text: #f4f5f4;
+  --text-secondary: #b3b7b5;
+  --text-muted: #858b88;
+  --border: #2a302d;
+  --border-strong: #3a413e;
+  --brand-action: #f98488;
+  --brand-action-contrast: #07120d;
+  --brand-action-soft: #351d22;
+  --brand-action-text: #f4f5f4;
+  --data-primary: #76d3a0;
+  --data-secondary: #84bbd8;
+  --data-fill: #76d3a0;
+  --accent: var(--brand-action);
+  --accent-contrast: var(--brand-action-contrast);
+  --accent-soft: var(--brand-action-soft);
+  --accent-text: var(--brand-action-text);
+  --brand-ink: #76d3a0;
+  --brand-on: #0b0d0e;
+  --success: #76d3a0;
   --success-soft: #102a20;
-  --danger: #ee7780;
+  --danger: #ff6678;
   --danger-soft: #31171a;
   --warning: #e0ad5c;
   --warning-soft: #2b2112;
@@ -52,7 +72,7 @@
   --info-soft: #142235;
   --shadow-sm: 0 1px 2px rgb(0 0 0 / 24%);
   --shadow-md: 0 14px 40px rgb(0 0 0 / 30%);
-  --code-bg: #0f151e;
+  --code-bg: #0f1211;
 }
 
 * {
@@ -140,7 +160,7 @@ pre {
 .button.primary {
   border-color: var(--accent);
   background: var(--accent);
-  color: #fff;
+  color: var(--accent-contrast);
 }
 
 .button.primary:hover {
@@ -200,8 +220,8 @@ pre {
   width: 34px;
   height: 34px;
   border-radius: 9px;
-  background: var(--text);
-  color: var(--surface);
+  background: var(--brand-ink);
+  color: var(--brand-on);
   place-items: center;
 }
 
@@ -2074,7 +2094,7 @@ tbody tr:last-child td {
 }
 
 .status-volume-chart .success {
-  background: var(--success);
+  background: var(--data-fill);
 }
 
 .status-volume-chart .failed {
@@ -2141,7 +2161,7 @@ tbody tr:last-child td {
 }
 
 .chart-legend i.success {
-  background: var(--success);
+  background: var(--data-fill);
 }
 
 .chart-legend i.warning {
@@ -2319,9 +2339,9 @@ tbody tr:last-child td {
 }
 
 .breakdown-tabs button.active {
-  border-color: var(--border);
-  background: var(--surface-muted);
-  color: var(--text);
+  border-color: color-mix(in srgb, var(--brand-action) 45%, var(--border));
+  background: var(--brand-action-soft);
+  color: var(--brand-action-text);
 }
 
 .breakdown-list {
@@ -2380,7 +2400,7 @@ tbody tr:last-child td {
   height: 100%;
   min-width: 2px;
   border-radius: inherit;
-  background: var(--accent);
+  background: var(--data-primary);
 }
 
 .metrics-freshness {
