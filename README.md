@@ -1,106 +1,94 @@
-# Agent Ops
+<div align="center">
+  <img src="./.github/assets/readme-hero.png" width="100%" alt="Agent Ops — see the whole agent run, not just the request" />
+</div>
 
-[简体中文](README.zh-CN.md)
+<h1 align="center">Agent Ops</h1>
 
-Agent Ops is a self-hosted observability platform for agent runs.
+<p align="center">
+  <strong>Self-hosted observability and evaluation for AI agents.</strong><br />
+  Trace every run. Review the failure. Turn it into a dataset.<br />
+  Prove the fix before the next release.
+</p>
 
-The first milestone is a complete vertical slice:
+<p align="center">
+  <a href="README.zh-CN.md">简体中文</a> ·
+  <a href="#quick-start">Quick start</a> ·
+  <a href="#architecture">Architecture</a> ·
+  <a href="#documentation">Documentation</a>
+</p>
+
+<p align="center">
+  <a href="https://github.com/DraskyChen/Agent-Ops/actions/workflows/ci.yml">
+    <img src="https://github.com/DraskyChen/Agent-Ops/actions/workflows/ci.yml/badge.svg" alt="CI status" />
+  </a>
+  <a href="https://www.npmjs.com/package/agent-ops-otel-sdk">
+    <img src="https://img.shields.io/npm/v/agent-ops-otel-sdk.svg?label=npm" alt="npm version" />
+  </a>
+  <a href="https://pypi.org/project/agent-ops-otel-sdk/">
+    <img src="https://img.shields.io/pypi/v/agent-ops-otel-sdk.svg?label=PyPI" alt="PyPI version" />
+  </a>
+  <img src="https://img.shields.io/badge/status-0.1%20alpha-f98488" alt="Status: 0.1 alpha" />
+  <a href="LICENSE">
+    <img src="https://img.shields.io/badge/license-Apache--2.0-blue.svg" alt="Apache-2.0 license" />
+  </a>
+</p>
+
+Agent Ops makes one complete agent run observable as a single trace: model
+calls, tool invocations, retrieval steps, planning, and sub-agents. Start from
+a failed or low-quality run, inspect the exact step, curate it into a dataset,
+evaluate a change, and compare the regression before release.
 
 ```text
-TypeScript or Python agent
-  -> thin Agent Ops SDK
-  -> OpenTelemetry SDK
-  -> OTLP ingest
-  -> PostgreSQL and object storage
-  -> trace list, trace tree, and complete content inspection
+Observe  →  Review  →  Curate  →  Evaluate  →  Compare  →  Improve
 ```
 
-Design documents:
+## Why Agent Ops
 
-- [Architecture](docs/architecture.md)
-- [Code architecture](docs/code-architecture.md)
-- [Model pricing](docs/pricing.md)
-- [架构设计（中文）](docs/architecture.zh-CN.md)
+**See the execution tree, not disconnected logs.** Follow an agent from its
+root run through every LLM call, tool call, retrieval step, and child agent,
+with timing, tokens, cost, status, and errors in context.
 
-## Current implementation status
+**Keep application and human trust boundaries separate.** SDKs authenticate
+with machine credentials. The console uses OIDC, role-based access, explicit
+content-viewing permission, access auditing, and retention controls.
 
-Implemented:
+**Close the loop from production to regression testing.** Use negative
+feedback, unresolved reviews, runtime failures, and failed evaluations as
+candidate data. Create immutable dataset revisions, run rules or an LLM Judge,
+and compare two runs on the same revision.
 
-- Machine-readable Contracts v0.1 with generated TypeScript and Python values.
-- Thin Node.js TypeScript and Python SDKs using the official OpenTelemetry SDKs.
-- Agent run, LLM, tool, retrieval, and sub-agent span helpers.
-- Shared redaction and attribute conventions.
-- OTLP/HTTP protobuf ingest using OpenTelemetry Proto `v1.11.1`.
-- PostgreSQL persistence and the trace aggregation/sealing worker.
-- Server-side trace filters with stable cursor pagination.
-- Server-mediated full-content upload and retrieval backed by MinIO.
-- TypeScript and Python SDK content capture with `content_id` span references.
-- User feedback ingestion with machine credentials and event idempotency.
-- Append-only internal trace reviews with reviewer identity and issue classification.
-- OIDC login with a local development identity mode and `viewer`, `reviewer`,
-  and `admin` roles.
-- Content access auditing, retention cleanup, and separate content viewing
-  permission.
-- Ingest health, rejection reasons, aggregation backlog, and Web operations page.
-- Shared trace metric definitions with hourly PostgreSQL rollups and latency histograms.
-- Operational dashboard for volume, status, cost, latency, tool errors, and
-  application/model/task/version distributions.
-- Dashboard-to-trace drill-down with bucket-aligned time ranges and structured filters.
-- Live trace list, detail, review, and content console backed by the query API.
-- Optional `agent.eval.case_id` in the TypeScript and Python SDKs for strict
-  cross-version pairing.
-- Immutable dataset revisions created from sealed traces, with copied input,
-  baseline output, and expected output content.
-- Evaluation-run APIs, strict candidate matching by `case_id`, and deterministic
-  exact, contains, regex, JSON, latency, cost, and tool-error rules.
-- Dataset and Evaluation consoles for creating revisions, starting rule
-  evaluations, polling run status, and inspecting per-case results.
-- Admin-enabled DeepSeek LLM Judge with structured scoring, explicit external
-  content consent, prompt/response auditing, token usage, and validation retry.
-- Two-run comparison over the same dataset revision and evaluator version,
-  including pass rate, score, cost, P95 latency, and per-case deltas.
-- Manual Trace-to-dataset curation, revision history, side-by-side content,
-  and immutable revision diffs.
-- Reusable evaluator templates, configuration replay, Trace/Dataset result
-  links, and audited Judge prompt/response inspection.
-- Candidate discovery from negative feedback, unresolved reviews, runtime
-  failures, and failed evaluations, with manual dismiss/restore decisions.
-- Trace waterfalls, Span search and error filtering, shareable Trace links,
-  a Session directory, and per-session run timelines.
-- A read-only Prompt Registry with lifecycle metadata, append-only audit
-  history, and Trace/Dataset/Evaluation association counts.
-- Copy and download actions for fully captured Trace content, with an
-  access-audit and retention warning before download.
-- A single-team production Compose file, multi-stage application image, Nginx
-  reverse proxy, and automatic migration service. Image build verification
-  still requires Docker Hub connectivity.
-- A recorded one-day, one-million-span database baseline for trace persistence,
-  list/search/detail latency, and storage.
-- SHA-256-checked PostgreSQL/MinIO backups, an explicitly confirmed full-restore
-  script, and a real development-stack restore drill.
-- CI gates for quality, real-dependency integration, and all image targets,
-  plus production config validation, release smoke checks, and an
-  OIDC/SDK/backup/rollback runbook.
-- Independent PostgreSQL and MinIO development stack.
+**Start with open standards.** Both SDKs are thin wrappers over the official
+OpenTelemetry SDKs and send OTLP over HTTP. PostgreSQL is the system of record;
+MinIO or any S3-compatible store holds captured content.
 
-Not implemented yet:
+<div align="center">
+  <img src="./.github/assets/trace-detail.png" width="100%" alt="Agent Ops trace detail with parent run, LLM spans, failed tool call, cost, tokens, and captured input" />
+  <sub>A failed tool call stays connected to its parent run, cost, tokens, and captured input.</sub>
+</div>
 
-- Container build/startup verification, warmed 30-day/concurrent OTLP capacity,
-  production RPO/RTO and offsite backup acceptance, and release acceptance.
+## Quick start
 
-## Local development
+### Requirements
+
+- Node.js 24+ and pnpm 12+
+- Docker with Compose
+- Python 3.11+ only if you are changing the Python SDK
 
 ```bash
+git clone https://github.com/DraskyChen/Agent-Ops.git
+cd Agent-Ops
+cp .env.example .env
+
 pnpm install
 pnpm contracts:build
-pnpm architecture:check
 pnpm infra:up
 pnpm db:migrate
 pnpm metrics:backfill
-pnpm typecheck
-pnpm test
-pnpm test:integration
+pnpm dev
 ```
+
+Open [http://localhost:3000/console](http://localhost:3000/console). Local
+development uses `AGENT_OPS_AUTH_MODE=dev`; production requires OIDC.
 
 If Docker uses a non-default context:
 
@@ -108,99 +96,204 @@ If Docker uses a non-default context:
 DOCKER_CONTEXT=orbstack pnpm infra:up
 ```
 
-`pnpm test:integration` requires the migrated PostgreSQL and MinIO development
-stack. It verifies filters, feedback idempotency, reviews, operations health,
-expired-content auditing, metric rollups, and dashboard queries against the
-real database.
-
-`pnpm metrics:backfill` rebuilds hourly metric rollups from trace projections.
-Pass `--from` and `--to` ISO timestamps to limit a rebuild.
-
-`pnpm metrics:load-test` requires `METRICS_LOAD_TEST_DATABASE_URL` and a server
-connected to the same disposable database. It refuses to run without that
-explicit override.
-
-`pnpm capacity:test` uses `CAPACITY_TEST_DATABASE_URL` to load a disposable
-database with one million spans by default and measure trace persistence,
-list/search/detail queries, and storage. Capacity test rows are automatically
-removed. See [the capacity baseline](docs/capacity.md) for results and limits.
-
-Backup and restore commands:
+Want realistic data immediately? Run the included examples:
 
 ```bash
+pnpm examples:ts
+# or
+pnpm examples:python
+```
+
+## Send your first trace
+
+Install the TypeScript SDK:
+
+```bash
+npm install agent-ops-otel-sdk@0.1.0
+```
+
+```ts
+import {
+  configureTracing,
+  shutdownTracing,
+  withAgentRun,
+  withLlmCall,
+  withToolCall,
+} from "agent-ops-otel-sdk";
+
+await configureTracing({
+  serviceName: "support-agent",
+  serviceVersion: "1.4.0",
+  appName: "customer-support",
+  environment: "prod",
+  endpoint: "https://agent-ops.example.com/v1/traces",
+  headers: {
+    authorization: `Bearer ${process.env.AGENT_OPS_INGEST_TOKEN}`,
+  },
+});
+
+try {
+  await withAgentRun(
+    {
+      sessionId: "session-123",
+      taskType: "support",
+      inputSummary: "Resolve a duplicate subscription",
+    },
+    async (run) => {
+      await withLlmCall(
+        {
+          provider: "deepseek",
+          requestModel: "deepseek-flash",
+          inputTokens: 420,
+          outputTokens: 80,
+        },
+        async () => "Call the subscription tool.",
+      );
+
+      await withToolCall(
+        {
+          name: "cancel_subscription",
+          argsSummary: '{"subscriptionId":"sub-b"}',
+        },
+        async () => ({ cancelled: true }),
+      );
+
+      run.complete("success", "final_answer");
+    },
+  );
+} finally {
+  await shutdownTracing();
+}
+```
+
+For full prompt and response capture, set `contentCapture: "full"` and provide
+`contentToken`. See the [examples](examples/README.md) for success, tool
+failure, retrieval, multi-agent, and DeepSeek runs.
+
+## SDKs
+
+Both SDKs expose the same `0.1` telemetry contract.
+
+| Runtime | Install | Import | Release |
+| --- | --- | --- | --- |
+| TypeScript / Node.js 20+ | `npm install agent-ops-otel-sdk@0.1.0` | `agent-ops-otel-sdk` | [npm](https://www.npmjs.com/package/agent-ops-otel-sdk) |
+| Python 3.11+ | `pip install agent-ops-otel-sdk==0.1.0` | `agent_ops` | [PyPI](https://pypi.org/project/agent-ops-otel-sdk/0.1.0/) |
+
+The npm package is ESM-only. Both packages are verified on their minimum
+runtime and published together under `sdk-v*` GitHub tags.
+
+- [TypeScript SDK guide](packages/sdk-typescript/README.md)
+- [Python SDK guide](packages/sdk-python/README.md)
+- [SDK release and compatibility runbook](docs/sdk-release.md)
+
+## What is included
+
+| Observe | Improve | Operate |
+| --- | --- | --- |
+| Trace search, execution tree, waterfall, Span errors, Sessions | Candidate discovery and internal trace reviews | OIDC and viewer / reviewer / admin roles |
+| Volume, status, cost, latency, tool-error dashboards | Immutable datasets, rule evaluation, DeepSeek LLM Judge | Content permissions, access audit, retention cleanup |
+| Complete captured content and shareable Trace links | Two-run comparison with per-case deltas | PostgreSQL and MinIO backups plus restore drill |
+| Prompt Registry with lifecycle and audit history | Evaluator templates and configuration replay | Single-team production Compose and migrations |
+
+## Architecture
+
+```mermaid
+flowchart LR
+  Agent["Agent application"] --> SDK["TypeScript / Python SDK"]
+  SDK --> OTel["OpenTelemetry SDK"]
+  OTel -->|"OTLP / HTTP"| Ingest["Ingest API"]
+  Ingest --> PG[("PostgreSQL")]
+  Ingest --> S3[("S3 / MinIO")]
+  Console["Agent Ops console"] --> Query["Query API"]
+  Query --> PG
+  Query --> S3
+  Worker["Worker"] --> PG
+  Worker --> S3
+```
+
+The first deployment is a modular monolith with three processes: `web`,
+`server`, and `worker`. PostgreSQL is the initial system of record; the
+persistence boundary allows trace storage to move later if measured query
+volume requires it. Ingest and query also stay separate modules with distinct
+trust boundaries.
+
+Read [Architecture](docs/architecture.md) and
+[Code Architecture](docs/code-architecture.md) for the design decisions and
+enforced module boundaries.
+
+### Production Compose
+
+```bash
+cp .env.production.example .env.production
+
+pnpm release:config
+pnpm release:build
+pnpm release:up
+```
+
+The `migrate` service runs before Server and Worker. Web listens on
+`http://127.0.0.1:8080` by default; the MinIO console is bound to local port
+`9001`. See the [release runbook](docs/release-runbook.md) before deploying.
+
+## Project status
+
+Agent Ops is **0.1 alpha / pre-production**. The core trace-to-evaluation
+vertical slice is implemented and exercised against real PostgreSQL and MinIO
+dependencies.
+
+Available today:
+
+- OTLP ingest, trace aggregation, query, content storage, and SDKs
+- Dashboards, Trace and Session inspection, reviews, and candidate discovery
+- Dataset revisions, rule and LLM evaluation, comparison, and Prompt Registry
+- OIDC roles, content auditing and retention, operational health, and Compose
+- A recorded one-day, one-million-Span database baseline
+- SHA-256-checked backups and a completed development-stack restore drill
+
+Before production acceptance:
+
+- Container build and startup verification in the target environment
+- Warmed 30-day and concurrent OTLP capacity testing
+- Production RPO/RTO, offsite backup, and release acceptance
+
+## Development
+
+```bash
+pnpm check
+pnpm test:integration
+pnpm --filter @agent-ops/web build
+```
+
+`pnpm test:integration` requires the migrated development stack. It validates
+filters, feedback idempotency, reviews, operations health, expired-content
+auditing, metric rollups, and dashboard queries against the real database.
+
+Capacity and recovery commands:
+
+```bash
+CAPACITY_TEST_DATABASE_URL=... pnpm capacity:test
 pnpm backup
 CONFIRM_RESTORE=yes pnpm restore /path/to/agent-ops-snapshot
 ```
 
-Restore stops the application and fully replaces the database and object
-bucket. See [the backup/restore drill](docs/backup-restore.md) for results and
-production requirements.
+Restore stops the application and fully replaces PostgreSQL and the object
+bucket. See [Capacity](docs/capacity.md) and
+[Backup & Restore](docs/backup-restore.md) for measured results and operating
+requirements.
 
-Python SDK:
+## Documentation
 
-```bash
-uv sync --project packages/sdk-python --extra dev
-uv run --project packages/sdk-python pytest -q
-uv run --project packages/sdk-python mypy packages/sdk-python/src/agent_ops
-```
+| Topic | Document |
+| --- | --- |
+| System design | [Architecture](docs/architecture.md) |
+| Module boundaries | [Code Architecture](docs/code-architecture.md) |
+| Run the SDK examples | [Examples](examples/README.md) |
+| Publish compatible SDK versions | [SDK release](docs/sdk-release.md) |
+| Deploy a single team | [Release runbook](docs/release-runbook.md) |
+| Review capacity evidence | [Capacity baseline](docs/capacity.md) |
+| Back up and restore | [Backup & Restore](docs/backup-restore.md) |
+| Model pricing | [Pricing](docs/pricing.md) |
 
-## SDK packages
+## License
 
-Version `0.1.0` is published to npm, PyPI, and the
-[GitHub Release](https://github.com/DraskyChen/Agent-Ops/releases/tag/sdk-v0.1.0).
-The TypeScript and Python SDKs are independently installable:
-
-```bash
-npm install agent-ops-otel-sdk@0.1.0
-pip install agent-ops-otel-sdk==0.1.0
-```
-
-The npm package is ESM-only and requires Node.js 20 or newer. The Python package
-requires Python 3.11 or newer. Both packages expose the same `0.1` telemetry
-contract and are released together under `sdk-v*` tags. The Python import name
-is `agent_ops`. See the [SDK release runbook](docs/sdk-release.md) for registry
-links, compatibility, checksums, and maintenance procedures.
-
-Run the platform:
-
-```bash
-pnpm dev
-```
-
-## Single-team container release
-
-```bash
-cp .env.production.example .env.production
-```
-
-The production configuration uses OIDC and requires
-`AGENT_OPS_INGEST_TOKEN`, PostgreSQL credentials, and object-store
-credentials. Only the Web entry point is exposed by default; SDKs should use
-`https://<host>/v1/traces`.
-
-```bash
-pnpm release:config
-pnpm release:build
-pnpm release:up
-docker compose --env-file .env.production \
-  -f infra/docker-compose/compose.production.yaml ps
-```
-
-The `migrate` service runs before Server and Worker. Web listens on
-`http://127.0.0.1:8080` by default, and the MinIO console is bound to local
-port `9001`.
-
-Local development defaults to `AGENT_OPS_AUTH_MODE=dev`. OIDC mode requires
-the `OIDC_*` values documented in `.env.example`; the server refuses to start in
-production with the development identity mode.
-
-Emit real traces through the TypeScript examples:
-
-```bash
-pnpm examples:ts
-```
-
-See [examples/README.md](examples/README.md) for individual TypeScript and
-Python examples.
-
-
+Apache-2.0. See [LICENSE](LICENSE).
