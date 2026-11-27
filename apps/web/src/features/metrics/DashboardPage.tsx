@@ -255,7 +255,7 @@ function DashboardCharts({
           series={[
             {
               label: "Cost",
-              color: "var(--accent)",
+              color: "var(--data-primary)",
               values: series.map((point) => point.costMicros),
               format: formatCost,
             },
@@ -533,7 +533,7 @@ function StatusVolumeChart({
             value={hoveredPoint.traceCount.toLocaleString()}
           />
           <TooltipValue
-            color="var(--success)"
+            color="var(--data-fill)"
             label="Success"
             value={hoveredPoint.statusCounts.success.toLocaleString()}
           />
